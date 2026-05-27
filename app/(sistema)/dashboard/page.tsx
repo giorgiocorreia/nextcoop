@@ -1,0 +1,157 @@
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+
+export default async function DashboardPage() {
+ const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const [
+    { count: totalCooperados },
+    { count: cooperadosAtivos },
+    { data: lancamentosPendentes },
+    { data: proximaAssembleia },
+    { data: documentosVencendo },
+    { data: ultimosLancamentos },
+  ] = await Promise.all([
+    supabase.from('cooperados').select('*', { count: 'exact', head: true }),
+    supabase.from('cooperados').select('*', { count: 'exact', head: true }).eq('status', 'ativo'),
+    supabase.from('lancamentos').select('valor, tipo').eq('status', 'pendente'),
+    supabase.from('assembleias').select('titulo, data_realizacao, tipo')
+      .eq('status', 'agendada').order('data_realizacao').limit(1),
+    supabase.from('documentos').select('nome, data_validade, categoria')
+      .not('data_validade', 'is', null)
+      .lte('data_validade', new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+      .order('data_validade').limit(5),
+    supabase.from('lancamentos').select('descricao, valor, tipo, data_competencia, status')
+      .order('criado_em', { ascending: false }).limit(5),
+  ])
+
+  const totalReceber = lancamentosPendentes
+    ?.filter(l => l.tipo === 'receita')
+    .reduce((s, l) => s + Number(l.valor), 0) || 0
+
+  const totalPagar = lancamentosPendentes
+    ?.filter(l => l.tipo === 'despesa')
+    .reduce((s, l) => s + Number(l.valor), 0) || 0
+
+  const formatBRL = (v: number) =>
+    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+  const hoje = new Date()
+
+  return (
+    <div style={{ maxWidth: '1100px' }}>
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '22px', fontWeight: '600', color: '#1a1a1a', margin: 0 }}>
+          Painel de controle
+        </h1>
+        <p style={{ fontSize: '14px', color: '#888', marginTop: '4px' }}>
+          {hoje.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '2rem' }}>
+        <CardResumo label="Total de cooperados" valor={String(totalCooperados || 0)} sub={`${cooperadosAtivos || 0} ativos`} cor="#1D9E75" bg="#E1F5EE" />
+        <CardResumo label="A receber" valor={formatBRL(totalReceber)} sub="Lançamentos pendentes" cor="#185FA5" bg="#E6F1FB" />
+        <CardResumo label="A pagar" valor={formatBRL(totalPagar)} sub="Lançamentos pendentes" cor="#993C1D" bg="#FAECE7" />
+        <CardResumo label="Docs vencendo" valor={String(documentosVencendo?.length || 0)} sub="Próximos 30 dias" cor="#854F0B" bg="#FAEEDA" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div style={{ background: '#fff', border: '1px solid #e5e3dc', borderRadius: '12px', padding: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: '600', margin: 0 }}>Últimos lançamentos</h2>
+            <a href="/financeiro" style={{ fontSize: '12px', color: '#1D9E75', textDecoration: 'none' }}>Ver todos →</a>
+          </div>
+          {ultimosLancamentos?.length ? (
+            <div>
+              {ultimosLancamentos.map((l, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: i > 0 ? '1px solid #f0eeea' : 'none' }}>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a' }}>{l.descricao}</div>
+                    <div style={{ fontSize: '11px', color: '#888', marginTop: '1px' }}>
+                      {new Date(l.data_competencia).toLocaleDateString('pt-BR')} ·{' '}
+                      <span style={{ color: l.status === 'pago' ? '#0F6E56' : '#854F0B' }}>
+                        {l.status === 'pago' ? 'Pago' : 'Pendente'}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: l.tipo === 'receita' ? '#0F6E56' : '#993C1D' }}>
+                    {l.tipo === 'receita' ? '+' : '-'}{formatBRL(Number(l.valor))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: '13px', color: '#aaa', textAlign: 'center', padding: '1rem 0' }}>
+              Nenhum lançamento registrado ainda.
+            </p>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {proximaAssembleia?.[0] && (
+            <div style={{ background: '#E6F1FB', border: '1px solid #B5D4F4', borderRadius: '12px', padding: '1.25rem' }}>
+              <div style={{ fontSize: '11px', fontWeight: '600', color: '#185FA5', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                Próxima assembleia
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: '600', color: '#0C447C' }}>{proximaAssembleia[0].titulo}</div>
+              <div style={{ fontSize: '13px', color: '#185FA5', marginTop: '4px' }}>
+                {new Date(proximaAssembleia[0].data_realizacao).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </div>
+            </div>
+          )}
+
+          {documentosVencendo && documentosVencendo.length > 0 && (
+            <div style={{ background: '#FAEEDA', border: '1px solid #FAC775', borderRadius: '12px', padding: '1.25rem' }}>
+              <div style={{ fontSize: '11px', fontWeight: '600', color: '#854F0B', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                Documentos vencendo em 30 dias
+              </div>
+              {documentosVencendo.map((doc, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderTop: i > 0 ? '1px solid #EF9F27' : 'none' }}>
+                  <span style={{ fontSize: '12px', color: '#633806' }}>{doc.nome}</span>
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#993C1D' }}>
+                    {new Date(doc.data_validade!).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ background: '#fff', border: '1px solid #e5e3dc', borderRadius: '12px', padding: '1.25rem' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a1a', marginBottom: '10px' }}>Ações rápidas</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {[
+                { label: 'Novo cooperado', href: '/cooperados/novo', icone: '👤' },
+                { label: 'Novo lançamento', href: '/financeiro/novo', icone: '💸' },
+                { label: 'Nova assembleia', href: '/assembleias/nova', icone: '🏛️' },
+                { label: 'Novo documento', href: '/documentos/novo', icone: '📄' },
+              ].map(a => (
+                <a key={a.href} href={a.href} style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 10px',
+                  background: '#f8f7f4', border: '1px solid #e5e3dc', borderRadius: '8px',
+                  textDecoration: 'none', fontSize: '12px', color: '#444', fontWeight: '500',
+                }}>
+                  <span>{a.icone}</span>{a.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CardResumo({ label, valor, sub, cor, bg }: {
+  label: string; valor: string; sub: string; cor: string; bg: string
+}) {
+  return (
+    <div style={{ background: bg, border: `1px solid ${cor}33`, borderRadius: '12px', padding: '1rem 1.25rem' }}>
+      <div style={{ fontSize: '12px', fontWeight: '500', color: cor, marginBottom: '6px' }}>{label}</div>
+      <div style={{ fontSize: '22px', fontWeight: '700', color: cor }}>{valor}</div>
+      <div style={{ fontSize: '11px', color: `${cor}99`, marginTop: '2px' }}>{sub}</div>
+    </div>
+  )
+}
