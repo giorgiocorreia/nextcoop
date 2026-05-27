@@ -1,11 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import type { Lancamento, Assembleia, Documento } from '@/types/database'
 
 export default async function DashboardPage() {
- const supabase = await createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Queries com tipagem explícita via .returns<>() para evitar falhas de
+  // inferência de tupla no TypeScript quando há muitas queries heterogêneas
+  // no mesmo Promise.all
   const [
     { count: totalCooperados },
     { count: cooperadosAtivos },
@@ -16,15 +20,28 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase.from('cooperados').select('*', { count: 'exact', head: true }),
     supabase.from('cooperados').select('*', { count: 'exact', head: true }).eq('status', 'ativo'),
-    supabase.from('lancamentos').select('valor, tipo').eq('status', 'pendente'),
-    supabase.from('assembleias').select('titulo, data_realizacao, tipo')
-      .eq('status', 'agendada').order('data_realizacao').limit(1),
-    supabase.from('documentos').select('nome, data_validade, categoria')
+    supabase.from('lancamentos')
+      .select('valor, tipo')
+      .eq('status', 'pendente')
+      .returns<Pick<Lancamento, 'valor' | 'tipo'>[]>(),
+    supabase.from('assembleias')
+      .select('titulo, data_realizacao, tipo')
+      .eq('status', 'agendada')
+      .order('data_realizacao')
+      .limit(1)
+      .returns<Pick<Assembleia, 'titulo' | 'data_realizacao' | 'tipo'>[]>(),
+    supabase.from('documentos')
+      .select('nome, data_validade, categoria')
       .not('data_validade', 'is', null)
       .lte('data_validade', new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-      .order('data_validade').limit(5),
-    supabase.from('lancamentos').select('descricao, valor, tipo, data_competencia, status')
-      .order('criado_em', { ascending: false }).limit(5),
+      .order('data_validade')
+      .limit(5)
+      .returns<Pick<Documento, 'nome' | 'data_validade' | 'categoria'>[]>(),
+    supabase.from('lancamentos')
+      .select('descricao, valor, tipo, data_competencia, status')
+      .order('criado_em', { ascending: false })
+      .limit(5)
+      .returns<Pick<Lancamento, 'descricao' | 'valor' | 'tipo' | 'data_competencia' | 'status'>[]>(),
   ])
 
   const totalReceber = lancamentosPendentes
