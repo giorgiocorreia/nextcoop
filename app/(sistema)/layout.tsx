@@ -2,6 +2,18 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/Sidebar'
 
+function assinaturaAtiva(org: { subscription_status: string | null; trial_ends_at: string | null } | null): boolean {
+  if (!org) return true
+  const status = org.subscription_status
+  if (!status) return true
+  if (status === 'active') return true
+  if (status === 'trialing') {
+    if (!org.trial_ends_at) return true
+    return new Date(org.trial_ends_at) > new Date()
+  }
+  return false
+}
+
 export default async function SistemaLayout({
   children,
 }: {
@@ -26,6 +38,12 @@ export default async function SistemaLayout({
       .eq('id', usuario.organizacao_id)
       .single()
     organizacao = org
+  }
+
+  const isSuperAdmin = usuario?.role === 'super_admin'
+
+  if (!isSuperAdmin && !assinaturaAtiva(organizacao)) {
+    redirect('/assinar')
   }
 
   const usuarioComOrg = usuario ? { ...usuario, organizacao } : null

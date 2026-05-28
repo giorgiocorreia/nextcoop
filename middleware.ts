@@ -33,9 +33,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isAuthPage =
     pathname.startsWith('/login') || pathname.startsWith('/redefinir-senha')
+  const isPublicPage =
+    pathname === '/' || pathname.startsWith('/assinar')
 
   // Redireciona para login se não autenticado e não está em página pública
-  if (!user && !isAuthPage) {
+  if (!user && !isAuthPage && !isPublicPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('redirect', pathname)

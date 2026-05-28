@@ -12,6 +12,8 @@ export type CategoriaDocumento = 'estatuto' | 'ata' | 'contrato' | 'convenio' | 
 export type TipoNotificacao   = 'alerta_documento' | 'alerta_caf' | 'alerta_certidao' | 'assembleia_convocacao' | 'financeiro_vencimento' | 'cooperado_novo' | 'sistema' | 'outro'
 export type StatusMensalidade = 'pendente' | 'pago' | 'vencido'
 
+export type StatusAssinatura = 'active' | 'past_due' | 'canceled' | 'trialing'
+
 export interface Organizacao {
   id: string
   nome: string
@@ -36,6 +38,12 @@ export interface Organizacao {
   registro_juceb: string | null
   ativo: boolean
   plano: PlanoOrganizacao
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  stripe_price_id: string | null
+  subscription_status: StatusAssinatura | null
+  trial_ends_at: string | null
+  subscription_ends_at: string | null
   criado_em: string
   atualizado_em: string
 }
