@@ -14,7 +14,7 @@ Lista de tarefas pendentes. Marque com `[x]` ao concluir.
 
 ## 🗄️ Dados
 
-- [ ] Cadastrar organização COOPAIBI e usuário admin no banco — seed em `supabase/seeds/001_coopaibi.sql`
+- [x] Cadastrar organização COOPAIBI e usuário admin no banco — seed em `supabase/seeds/001_coopaibi.sql`
 
 ## 🌐 Deploy
 

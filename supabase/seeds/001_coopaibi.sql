@@ -13,8 +13,8 @@
 
 do $$
 declare
-  org_id       uuid := gen_random_uuid();
-  admin_auth_id uuid := '00000000-0000-0000-0000-000000000000'; -- ← substitua pelo UUID real
+  org_id       uuid := '3ad97dc2-f87f-4e67-950e-387854d5bccc';  -- aplicado em 2026-05-28
+  admin_auth_id uuid := '22543201-bc5e-476c-9fdb-59242c25224a'; -- contato@coopaibi.com.br
 begin
 
   -- Organização
