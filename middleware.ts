@@ -25,18 +25,14 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Atualiza sessão — NÃO use getSession() aqui (inseguro)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
-  const isAuthPage =
-    pathname.startsWith('/login') || pathname.startsWith('/redefinir-senha')
-  const isPublicPage =
-    pathname === '/' || pathname.startsWith('/assinar')
+  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/redefinir-senha')
+  const isPublicPage = pathname === '/' || pathname.startsWith('/assinar')
+  const isOnboarding = pathname.startsWith('/onboarding')
 
-  // Redireciona para login se não autenticado e não está em página pública
+  // Não autenticado — redireciona para login
   if (!user && !isAuthPage && !isPublicPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
@@ -44,11 +40,34 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redireciona para dashboard se já autenticado e tenta acessar login
+  // Já autenticado tentando acessar login
   if (user && isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
+  }
+
+  // Verifica onboarding para usuários autenticados no sistema
+  if (user && !isAuthPage && !isPublicPage && !isOnboarding) {
+    const { data: usuario } = await supabase
+      .from('usuarios')
+      .select('organizacao_id, role')
+      .eq('id', user.id)
+      .single()
+
+    if (usuario?.role !== 'super_admin' && usuario?.organizacao_id) {
+      const { data: org } = await supabase
+        .from('organizacoes')
+        .select('onboarding_concluido')
+        .eq('id', usuario.organizacao_id)
+        .single()
+
+      if (org && !org.onboarding_concluido) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/onboarding'
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   return supabaseResponse
@@ -56,13 +75,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Aplica middleware em todas as rotas exceto:
-     * - _next/static (arquivos estáticos)
-     * - _next/image (otimização de imagens)
-     * - favicon.ico
-     * - Arquivos com extensão (svg, png, jpg, etc.)
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
