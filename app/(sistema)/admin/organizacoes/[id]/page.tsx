@@ -7,22 +7,20 @@ export async function generateMetadata() {
   return { title: 'Organização — Admin — NextCoop' }
 }
 
-export default async function OrgDetalhePage({ params }: { params: { id: string } }) {
+export default async function OrgDetalhePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const admin = createAdminClient()
 
-  const { data: org, error: orgError } = await admin
+  const { data: org } = await admin
     .from('organizacoes')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
-
-  console.log('[OrgDetalhePage] id:', params.id)
-  console.log('[OrgDetalhePage] org:', org)
-  console.log('[OrgDetalhePage] error:', orgError)
 
   if (!org) redirect('/admin')
 
@@ -32,10 +30,10 @@ export default async function OrgDetalhePage({ params }: { params: { id: string 
     { count: totalMensalidades },
     { count: totalDocumentos },
   ] = await Promise.all([
-    admin.from('usuarios').select('*').eq('organizacao_id', params.id).order('nome_completo'),
-    admin.from('cooperados').select('*', { count: 'exact', head: true }).eq('organizacao_id', params.id),
-    admin.from('mensalidades').select('*', { count: 'exact', head: true }).eq('organizacao_id', params.id),
-    admin.from('documentos').select('*', { count: 'exact', head: true }).eq('organizacao_id', params.id),
+    admin.from('usuarios').select('*').eq('organizacao_id', id).order('nome_completo'),
+    admin.from('cooperados').select('*', { count: 'exact', head: true }).eq('organizacao_id', id),
+    admin.from('mensalidades').select('*', { count: 'exact', head: true }).eq('organizacao_id', id),
+    admin.from('documentos').select('*', { count: 'exact', head: true }).eq('organizacao_id', id),
   ])
 
   return (
