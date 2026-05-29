@@ -18,6 +18,7 @@ interface Plano {
   features: string[]
   destaque: boolean
   priceId: string | null
+  gratuito: boolean
 }
 
 interface Props {
@@ -31,6 +32,11 @@ export default function AssinarPlanos({ planos, orgId }: Props) {
   const router = useRouter()
 
   async function handleAssinar(plano: Plano) {
+    if (plano.gratuito) {
+      router.push('/dashboard')
+      return
+    }
+
     if (!plano.priceId) return
     if (!orgId) {
       setErro('Sua conta ainda não está associada a uma organização. Contate o suporte.')
@@ -65,28 +71,24 @@ export default function AssinarPlanos({ planos, orgId }: Props) {
   return (
     <div style={{ fontFamily: FONT }}>
       {erro && (
-        <div
-          style={{
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            color: '#b91c1c',
-            borderRadius: 8,
-            padding: '12px 16px',
-            fontSize: 14,
-            marginBottom: 32,
-          }}
-        >
+        <div style={{
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          color: '#b91c1c',
+          borderRadius: 8,
+          padding: '12px 16px',
+          fontSize: 14,
+          marginBottom: 32,
+        }}>
           {erro}
         </div>
       )}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
-          gap: 20,
-        }}
-      >
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: 20,
+      }}>
         {planos.map((plano) => (
           <PlanoCard
             key={plano.key}
@@ -110,37 +112,34 @@ function PlanoCard({
   onAssinar: () => void
 }) {
   const enterprise = plano.key === 'enterprise'
+  const gratuito = plano.gratuito
 
   return (
-    <div
-      style={{
-        border: plano.destaque ? `2px solid ${GREEN}` : '1px solid #e8e6e1',
-        borderRadius: 16,
-        padding: '32px 24px',
-        background: plano.destaque ? '#f0faf6' : BG,
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-      }}
-    >
+    <div style={{
+      border: plano.destaque ? `2px solid ${GREEN}` : '1px solid #e8e6e1',
+      borderRadius: 16,
+      padding: '32px 24px',
+      background: plano.destaque ? '#f0faf6' : BG,
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+    }}>
       {plano.destaque && (
-        <span
-          style={{
-            position: 'absolute',
-            top: -12,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: GREEN,
-            color: '#fff',
-            fontSize: 11,
-            fontWeight: 700,
-            padding: '3px 12px',
-            borderRadius: 20,
-            letterSpacing: '0.5px',
-            textTransform: 'uppercase',
-            whiteSpace: 'nowrap',
-          }}
-        >
+        <span style={{
+          position: 'absolute',
+          top: -12,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: GREEN,
+          color: '#fff',
+          fontSize: 11,
+          fontWeight: 700,
+          padding: '3px 12px',
+          borderRadius: 20,
+          letterSpacing: '0.5px',
+          textTransform: 'uppercase',
+          whiteSpace: 'nowrap',
+        }}>
           Mais popular
         </span>
       )}
@@ -158,24 +157,21 @@ function PlanoCard({
 
       <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', flex: 1 }}>
         {plano.features.map((f) => (
-          <li
-            key={f}
-            style={{
-              fontSize: 13,
-              color: '#555',
-              padding: '5px 0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
+          <li key={f} style={{
+            fontSize: 13,
+            color: '#555',
+            padding: '5px 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}>
             <span style={{ color: GREEN, fontWeight: 700 }}>✓</span> {f}
           </li>
         ))}
       </ul>
 
       {enterprise ? (
-        <a
+        
           href="mailto:contato@nextcoop.com.br"
           style={{
             display: 'block',
@@ -192,6 +188,24 @@ function PlanoCard({
         >
           Falar com vendas
         </a>
+      ) : gratuito ? (
+        <button
+          onClick={onAssinar}
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: '11px 0',
+            borderRadius: 8,
+            background: 'transparent',
+            border: `1.5px solid #ccc`,
+            color: '#666',
+            fontWeight: 600,
+            fontSize: 14,
+            cursor: 'pointer',
+          }}
+        >
+          Começar grátis
+        </button>
       ) : (
         <button
           onClick={onAssinar}

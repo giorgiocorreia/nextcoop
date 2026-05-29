@@ -26,6 +26,22 @@ export default async function AssinarPage() {
 
   const planos = [
     {
+      key: 'gratuito',
+      nome: 'Gratuito',
+      preco: 'R$ 0',
+      periodo: '/mês',
+      limite: 'Até 10 filiados',
+      features: [
+        'Gestão de filiados',
+        'Mensalidades',
+        'Documentos',
+        'Assembleias',
+      ],
+      destaque: false,
+      priceId: null,
+      gratuito: true,
+    },
+    {
       key: 'essencial',
       nome: 'Essencial',
       preco: 'R$ 149',
@@ -39,6 +55,7 @@ export default async function AssinarPage() {
       ],
       destaque: false,
       priceId: process.env.STRIPE_PRICE_ESSENCIAL ?? null,
+      gratuito: false,
     },
     {
       key: 'profissional',
@@ -54,6 +71,7 @@ export default async function AssinarPage() {
       ],
       destaque: true,
       priceId: process.env.STRIPE_PRICE_PROFISSIONAL ?? null,
+      gratuito: false,
     },
     {
       key: 'agro',
@@ -69,6 +87,7 @@ export default async function AssinarPage() {
       ],
       destaque: false,
       priceId: process.env.STRIPE_PRICE_AGRO ?? null,
+      gratuito: false,
     },
     {
       key: 'enterprise',
@@ -84,6 +103,7 @@ export default async function AssinarPage() {
       ],
       destaque: false,
       priceId: null,
+      gratuito: false,
     },
   ]
 
@@ -96,33 +116,29 @@ export default async function AssinarPage() {
             <span style={{ fontWeight: 700, fontSize: 20, color: GREEN_DARK }}>NextCoop</span>
           </div>
 
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              background: '#e6f5f0',
-              color: GREEN_DARK,
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: '0.5px',
-              padding: '5px 14px',
-              borderRadius: 20,
-              marginBottom: 20,
-              textTransform: 'uppercase',
-            }}
-          >
-            14 dias grátis · Sem cartão de crédito
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            background: '#e6f5f0',
+            color: GREEN_DARK,
+            fontSize: 12,
+            fontWeight: 600,
+            letterSpacing: '0.5px',
+            padding: '5px 14px',
+            borderRadius: 20,
+            marginBottom: 20,
+            textTransform: 'uppercase',
+          }}>
+            14 dias grátis nos planos pagos · Sem cartão de crédito
           </div>
 
-          <h1
-            style={{
-              fontSize: 40,
-              fontWeight: 800,
-              letterSpacing: '-1px',
-              color: TEXT,
-              marginBottom: 12,
-            }}
-          >
+          <h1 style={{
+            fontSize: 40,
+            fontWeight: 800,
+            letterSpacing: '-1px',
+            color: TEXT,
+            marginBottom: 12,
+          }}>
             Escolha o plano ideal para sua cooperativa
           </h1>
           <p style={{ fontSize: 16, color: '#666', maxWidth: 520, margin: '0 auto' }}>
@@ -133,7 +149,7 @@ export default async function AssinarPage() {
         <AssinarPlanos planos={planos} orgId={orgId} />
 
         <p style={{ textAlign: 'center', fontSize: 13, color: '#999', marginTop: 40 }}>
-          Pagamento seguro via Stripe · Todos os planos incluem 14 dias de avaliação gratuita
+          Pagamento seguro via Stripe · Planos pagos incluem 14 dias de avaliação gratuita
         </p>
       </div>
     </div>
