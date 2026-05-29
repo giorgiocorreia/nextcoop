@@ -70,8 +70,6 @@ export default function Sidebar({ usuario }: Props) {
   const isSuperAdmin = usuario?.role === 'super_admin'
   const org = usuario?.organizacao
 
-  // Cabeçalho: super_admin vê "NextCoop" com badge "Plataforma"
-  // org_admin e demais veem o nome da organização
   const orgNome = isSuperAdmin
     ? 'NextCoop'
     : (org?.nome_curto || org?.nome || 'NextCoop')
@@ -183,6 +181,39 @@ export default function Sidebar({ usuario }: Props) {
             })}
           </div>
         ))}
+
+        {/* Configurações — apenas para org_admin */}
+        {!isSuperAdmin && (
+          <div style={{ marginBottom: '0.5rem' }}>
+            <div style={{
+              fontSize: '10px', fontWeight: '600', color: '#aaa',
+              textTransform: 'uppercase', letterSpacing: '0.8px',
+              padding: '0.5rem 1rem 0.25rem',
+            }}>
+              Conta
+            </div>
+            {(() => {
+              const ativo = pathname === '/configuracoes'
+              return (
+                <button
+                  onClick={() => router.push('/configuracoes')}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '8px 1rem', background: ativo ? '#e8f7f2' : 'transparent',
+                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                  }}
+                  onMouseEnter={e => { if (!ativo) (e.currentTarget as HTMLButtonElement).style.background = '#f5f5f2' }}
+                  onMouseLeave={e => { if (!ativo) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                >
+                  <span style={{ fontSize: '16px', flexShrink: 0 }}>⚙️</span>
+                  <span style={{ fontSize: '13px', fontWeight: ativo ? '600' : '400', color: ativo ? '#0F6E56' : '#444' }}>
+                    Configurações
+                  </span>
+                </button>
+              )
+            })()}
+          </div>
+        )}
       </nav>
 
       {/* Rodapé usuário */}

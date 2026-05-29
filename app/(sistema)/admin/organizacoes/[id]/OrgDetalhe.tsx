@@ -3,11 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Organizacao, Usuario, PlanoOrganizacao, RoleUsuario } from '@/types/database'
+import type { Organizacao, Usuario, RoleUsuario } from '@/types/database'
 
-const PLANO_CONFIG: Record<PlanoOrganizacao, { label: string; cor: string; bg: string }> = {
+const PLANO_CONFIG: Record<string, { label: string; cor: string; bg: string }> = {
+  gratuito:    { label: 'Gratuito',    cor: '#555',    bg: '#f0eeea' },
   essencial:   { label: 'Essencial',   cor: '#444',    bg: '#f5f5f2' },
   cooperativa: { label: 'Cooperativa', cor: '#185FA5', bg: '#E6F1FB' },
+  profissional:{ label: 'Profissional',cor: '#0F6E56', bg: '#E1F5EE' },
   agro:        { label: 'Agro',        cor: '#0F6E56', bg: '#E1F5EE' },
   impacto:     { label: 'Impacto',     cor: '#6366f1', bg: '#ede9fe' },
   enterprise:  { label: 'Enterprise',  cor: '#854F0B', bg: '#FAEEDA' },
@@ -24,7 +26,7 @@ const ROLE_LABEL: Record<RoleUsuario, string> = {
   parceiro:        'Parceiro',
 }
 
-const PLANOS: PlanoOrganizacao[] = ['essencial', 'cooperativa', 'agro', 'impacto', 'enterprise']
+const PLANOS = ['gratuito', 'essencial', 'profissional', 'agro', 'enterprise']
 
 interface Props {
   org: Organizacao
@@ -32,6 +34,109 @@ interface Props {
   totalCooperados: number
   totalMensalidades: number
   totalDocumentos: number
+}
+
+function IsentarForm({ org, onUpdate }: { org: Organizacao; onUpdate: (org: Organizacao) => void }) {
+  const supabase = createClient()
+  const [salvando, setSalvando] = useState(false)
+  const [isento, setIsento] = useState((org as any).isento ?? false)
+  const [modo, setModo] = useState<'data' | 'indefinido'>(
+    (org as any).isento_ate === '9999-12-31' ? 'indefinido' : 'data'
+  )
+  const [isentoAte, setIsentoAte] = useState(
+    (org as any).isento_ate === '9999-12-31' ? '' : (org as any).isento_ate || ''
+  )
+  const [sucesso, setSucesso] = useState('')
+  const [erro, setErro] = useState('')
+
+  async function salvar() {
+    setSalvando(true)
+    setErro('')
+    setSucesso('')
+
+    const payload = {
+      isento,
+      isento_ate: !isento ? null : modo === 'indefinido' ? '9999-12-31' : isentoAte || null,
+    }
+
+    const { error } = await supabase
+      .from('organizacoes')
+      .update(payload)
+      .eq('id', org.id)
+
+    if (error) {
+      setErro(error.message)
+    } else {
+      setSucesso('Isenção atualizada.')
+      onUpdate({ ...org, ...payload } as Organizacao)
+    }
+    setSalvando(false)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+        <input type="checkbox" checked={isento} onChange={e => setIsento(e.target.checked)}
+          style={{ accentColor: '#1D9E75', width: '16px', height: '16px' }} />
+        <span style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a' }}>
+          Organização isenta de pagamento
+        </span>
+      </label>
+
+      {isento && (
+        <div style={{ paddingLeft: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            {[
+              { val: 'data', label: 'Até uma data' },
+              { val: 'indefinido', label: 'Indefinidamente' },
+            ].map(op => (
+              <label key={op.val} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', color: '#555' }}>
+                <input type="radio" name="modo_isencao" value={op.val}
+                  checked={modo === op.val}
+                  onChange={() => setModo(op.val as 'data' | 'indefinido')}
+                  style={{ accentColor: '#1D9E75' }} />
+                {op.label}
+              </label>
+            ))}
+          </div>
+
+          {modo === 'data' && (
+            <input type="date" value={isentoAte}
+              onChange={e => setIsentoAte(e.target.value)}
+              style={{
+                padding: '8px 12px', border: '1px solid #d5d3cc',
+                borderRadius: '8px', fontSize: '13px', background: '#fafaf8',
+                maxWidth: '200px', outline: 'none',
+              }}
+            />
+          )}
+
+          {modo === 'indefinido' && (
+            <div style={{
+              fontSize: '12px', color: '#92400e',
+              background: '#fef3c7', border: '1px solid #f5c842',
+              borderRadius: '6px', padding: '6px 10px',
+            }}>
+              ⚠️ Isenção sem prazo — válida até você alterar manualmente.
+            </div>
+          )}
+        </div>
+      )}
+
+      {erro && <div style={{ fontSize: '12px', color: '#dc2626' }}>{erro}</div>}
+      {sucesso && <div style={{ fontSize: '12px', color: '#0F6E56' }}>✓ {sucesso}</div>}
+
+      <button onClick={salvar} disabled={salvando} style={{
+        padding: '8px 16px', background: salvando ? '#7fceb1' : '#1D9E75',
+        color: '#fff', border: 'none', borderRadius: '8px',
+        fontSize: '13px', fontWeight: '600',
+        cursor: salvando ? 'not-allowed' : 'pointer',
+        alignSelf: 'flex-start',
+      }}>
+        {salvando ? 'Salvando...' : 'Salvar isenção'}
+      </button>
+    </div>
+  )
 }
 
 export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados, totalMensalidades, totalDocumentos }: Props) {
@@ -42,7 +147,7 @@ export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados,
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
 
-  async function alterarPlano(novoPlano: PlanoOrganizacao) {
+  async function alterarPlano(novoPlano: string) {
     setSalvando(true)
     setErro('')
     setSucesso('')
@@ -53,8 +158,8 @@ export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados,
     if (error) {
       setErro(error.message)
     } else {
-      setOrg(prev => ({ ...prev, plano: novoPlano }))
-      setSucesso(`Plano alterado para ${PLANO_CONFIG[novoPlano].label}.`)
+      setOrg(prev => ({ ...prev, plano: novoPlano as any }))
+      setSucesso(`Plano alterado para ${PLANO_CONFIG[novoPlano]?.label ?? novoPlano}.`)
     }
     setSalvando(false)
   }
@@ -81,10 +186,8 @@ export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados,
     <div style={{ maxWidth: '900px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '1.25rem' }}>
-        <button
-          onClick={() => router.push('/admin')}
-          style={{ fontSize: '13px', color: '#1D9E75', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-        >
+        <button onClick={() => router.push('/admin')}
+          style={{ fontSize: '13px', color: '#1D9E75', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           Admin
         </button>
         <span style={{ color: '#aaa', fontSize: '13px' }}>›</span>
@@ -102,37 +205,36 @@ export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados,
             justifyContent: 'center', fontSize: '22px', flexShrink: 0,
           }}>🌱</div>
           <div>
-            <h1 style={{ fontSize: '20px', fontWeight: '600', color: '#1a1a1a', margin: 0 }}>
-              {org.nome}
-            </h1>
+            <h1 style={{ fontSize: '20px', fontWeight: '600', color: '#1a1a1a', margin: 0 }}>{org.nome}</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-              {org.nome_curto && (
-                <span style={{ fontSize: '12px', color: '#888' }}>{org.nome_curto}</span>
-              )}
+              {org.nome_curto && <span style={{ fontSize: '12px', color: '#888' }}>{org.nome_curto}</span>}
               <span style={{
-                display: 'inline-block', padding: '2px 8px',
-                borderRadius: '20px', fontSize: '11px', fontWeight: '600',
+                display: 'inline-block', padding: '2px 8px', borderRadius: '20px',
+                fontSize: '11px', fontWeight: '600',
                 color: org.ativo ? '#0F6E56' : '#7f1d1d',
                 background: org.ativo ? '#E1F5EE' : '#fee2e2',
               }}>
                 {org.ativo ? 'Ativa' : 'Inativa'}
               </span>
+              {(org as any).isento && (
+                <span style={{
+                  display: 'inline-block', padding: '2px 8px', borderRadius: '20px',
+                  fontSize: '11px', fontWeight: '600', color: '#854F0B', background: '#fef3c7',
+                }}>
+                  Isenta
+                </span>
+              )}
             </div>
           </div>
         </div>
-        <button
-          onClick={toggleAtivo}
-          disabled={salvando}
-          style={{
-            padding: '9px 18px',
-            background: org.ativo ? '#fef2f2' : '#E1F5EE',
-            color: org.ativo ? '#dc2626' : '#0F6E56',
-            border: `1px solid ${org.ativo ? '#fca5a5' : '#1D9E7533'}`,
-            borderRadius: '8px', fontSize: '13px',
-            fontWeight: '600', cursor: salvando ? 'not-allowed' : 'pointer',
-            opacity: salvando ? 0.6 : 1,
-          }}
-        >
+        <button onClick={toggleAtivo} disabled={salvando} style={{
+          padding: '9px 18px',
+          background: org.ativo ? '#fef2f2' : '#E1F5EE',
+          color: org.ativo ? '#dc2626' : '#0F6E56',
+          border: `1px solid ${org.ativo ? '#fca5a5' : '#1D9E7533'}`,
+          borderRadius: '8px', fontSize: '13px', fontWeight: '600',
+          cursor: salvando ? 'not-allowed' : 'pointer', opacity: salvando ? 0.6 : 1,
+        }}>
           {org.ativo ? 'Desativar organização' : 'Ativar organização'}
         </button>
       </div>
@@ -168,9 +270,7 @@ export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados,
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
         {/* Dados da organização */}
         <div style={{ background: '#fff', border: '1px solid #e5e3dc', borderRadius: '12px', padding: '1.25rem' }}>
-          <div style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a1a', marginBottom: '1rem' }}>
-            Dados da organização
-          </div>
+          <div style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a1a', marginBottom: '1rem' }}>Dados da organização</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
             {[
               { label: 'CNPJ', valor: org.cnpj || '—' },
@@ -195,12 +295,10 @@ export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados,
 
         {/* Alterar plano */}
         <div style={{ background: '#fff', border: '1px solid #e5e3dc', borderRadius: '12px', padding: '1.25rem' }}>
-          <div style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a1a', marginBottom: '0.75rem' }}>
-            Plano atual
-          </div>
+          <div style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a1a', marginBottom: '0.75rem' }}>Plano atual</div>
           <div style={{ marginBottom: '1rem' }}>
             {(() => {
-              const cfg = PLANO_CONFIG[org.plano]
+              const cfg = PLANO_CONFIG[org.plano] ?? { label: org.plano, cor: '#444', bg: '#f5f5f2' }
               return (
                 <span style={{
                   display: 'inline-block', padding: '5px 14px',
@@ -219,10 +317,7 @@ export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados,
             {PLANOS.filter(p => p !== org.plano).map(plano => {
               const cfg = PLANO_CONFIG[plano]
               return (
-                <button
-                  key={plano}
-                  onClick={() => alterarPlano(plano)}
-                  disabled={salvando}
+                <button key={plano} onClick={() => alterarPlano(plano)} disabled={salvando}
                   style={{
                     width: '100%', padding: '8px 12px',
                     background: '#fafaf8', border: '1px solid #e5e3dc',
@@ -246,6 +341,14 @@ export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados,
             })}
           </div>
         </div>
+      </div>
+
+      {/* Isenção */}
+      <div style={{ background: '#fff', border: '1px solid #e5e3dc', borderRadius: '12px', padding: '1.25rem', marginBottom: '1rem' }}>
+        <div style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a1a', marginBottom: '1rem' }}>
+          Isenção de pagamento
+        </div>
+        <IsentarForm org={org} onUpdate={setOrg} />
       </div>
 
       {/* Usuários vinculados */}
