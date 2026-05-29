@@ -197,7 +197,7 @@ function PlanoCard({
             padding: '11px 0',
             borderRadius: 8,
             background: 'transparent',
-            border: `1.5px solid #ccc`,
+            border: '1.5px solid #ccc',
             color: '#666',
             fontWeight: 600,
             fontSize: 14,
