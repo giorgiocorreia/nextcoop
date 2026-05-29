@@ -92,31 +92,31 @@ export default function ConfiguracoesForm({ org: orgInicial, isSuperAdmin }: Pro
 
     const supabase = createClient()
 
-    const payload: Partial<Organizacao> = {
-      nome_curto: form.nome_curto.trim() || null,
-      email: form.email.trim() || null,
-      telefone: form.telefone.trim() || null,
-      site: form.site.trim() || null,
-      cep: form.cep.replace(/\D/g, '') || null,
-      logradouro: form.logradouro.trim() || null,
-      numero: form.numero.trim() || null,
-      complemento: form.complemento.trim() || null,
-      bairro: form.bairro.trim() || null,
-      cidade: form.cidade.trim() || null,
-      estado: form.estado || null,
-    }
+    const payload: Record<string, unknown> = {
+  nome_curto: form.nome_curto.trim() || undefined,
+  email: form.email.trim() || undefined,
+  telefone: form.telefone.trim() || undefined,
+  site: form.site.trim() || undefined,
+  cep: form.cep.replace(/\D/g, '') || undefined,
+  logradouro: form.logradouro.trim() || undefined,
+  numero: form.numero.trim() || undefined,
+  complemento: form.complemento.trim() || undefined,
+  bairro: form.bairro.trim() || undefined,
+  cidade: form.cidade.trim() || undefined,
+  estado: form.estado || undefined,
+}
 
-    if (isSuperAdmin) {
-      payload.nome = form.nome.trim()
-      payload.tipo = form.tipo as Organizacao['tipo']
-      payload.cnpj = form.cnpj.replace(/\D/g, '') || null
-      payload.data_fundacao = form.data_fundacao || null
-      payload.registro_juceb = form.registro_juceb.trim() || null
-    }
+if (isSuperAdmin) {
+  payload.nome = form.nome.trim()
+  payload.tipo = form.tipo
+  payload.cnpj = form.cnpj.replace(/\D/g, '') || undefined
+  payload.data_fundacao = form.data_fundacao || undefined
+  payload.registro_juceb = form.registro_juceb.trim() || undefined
+}
 
     const { error } = await supabase
       .from('organizacoes')
-      .update(payload)
+      .update(payload as any)
       .eq('id', orgInicial.id)
 
     if (error) {
