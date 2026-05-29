@@ -23,7 +23,13 @@ export default function OnboardingPage() {
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
-  const [form, setForm] = useState({
+ const [form, setForm] = useState<{
+    tipo: 'cooperativa' | 'associacao' | 'central'
+    cnpj: string
+    telefone: string
+    cidade: string
+    estado: string
+  }>({
     tipo: 'cooperativa',
     cnpj: '',
     telefone: '',
