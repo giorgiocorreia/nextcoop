@@ -1,7 +1,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type TipoOrganizacao = 'cooperativa' | 'associacao' | 'central'
-export type PlanoOrganizacao = 'essencial' | 'cooperativa' | 'agro' | 'impacto' | 'enterprise'
+export type PlanoOrganizacao = 'gratuito' | 'essencial' | 'profissional' | 'cooperativa' | 'agro' | 'impacto' | 'enterprise'
 export type RoleUsuario = 'super_admin' | 'org_admin' | 'financeiro' | 'tecnico' | 'comercial' | 'conselho_fiscal' | 'cooperado' | 'parceiro'
 export type StatusCooperado = 'proposta' | 'probatorio' | 'ativo' | 'inadimplente' | 'suspenso' | 'demitido' | 'excluido'
 export type TipoLancamento = 'receita' | 'despesa' | 'transferencia'
@@ -42,6 +42,9 @@ export interface Organizacao {
   stripe_subscription_id: string | null
   stripe_price_id: string | null
   subscription_status: StatusAssinatura | null
+  onboarding_concluido: boolean
+  isento: boolean
+  isento_ate: string | null
   trial_ends_at: string | null
   subscription_ends_at: string | null
   criado_em: string
