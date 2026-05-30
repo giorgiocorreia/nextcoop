@@ -23,6 +23,12 @@ interface NavGrupo {
 
 const NAV_ADMIN: NavGrupo[] = [
   {
+    grupo: 'Sistema',
+    itens: [
+      { label: 'Dashboard', href: '/admin', icone: '📊', exact: true },
+    ],
+  },
+  {
     grupo: 'Plataforma',
     itens: [
       { label: 'Organizações', href: '/admin',          icone: '🏢', exact: true },
