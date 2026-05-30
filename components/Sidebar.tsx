@@ -1,7 +1,8 @@
-﻿'use client'
+'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { temAlgumaFuncao } from '@/lib/permissoes'
 import type { Usuario, Organizacao } from '@/types/database'
 
 interface NavItem {
@@ -9,9 +10,36 @@ interface NavItem {
   href: string
   icone: string
   em_breve?: boolean
+  exact?: boolean
+  funcoes_requeridas?: string[]
+  modulo?: string
 }
 
-const NAV: { grupo: string; itens: NavItem[] }[] = [
+interface NavGrupo {
+  grupo: string
+  funcoes_requeridas?: string[]
+  itens: NavItem[]
+}
+
+const NAV_ADMIN: NavGrupo[] = [
+  {
+    grupo: 'Sistema',
+    itens: [
+      { label: 'Dashboard', href: '/admin', icone: '📊', exact: true },
+    ],
+  },
+  {
+    grupo: 'Plataforma',
+    itens: [
+      { label: 'Organizações', href: '/admin/organizacoes', icone: '🏢' },
+      { label: 'Usuários',     href: '/admin/usuarios',     icone: '👥', em_breve: true },
+      { label: 'Módulos',      href: '/admin/modulos',      icone: '🧩', em_breve: true },
+      { label: 'Planos',       href: '/admin/planos',       icone: '💳', em_breve: true },
+    ],
+  },
+]
+
+const NAV: NavGrupo[] = [
   {
     grupo: 'Principal',
     itens: [
@@ -25,6 +53,7 @@ const NAV: { grupo: string; itens: NavItem[] }[] = [
   },
   {
     grupo: 'Agro',
+    funcoes_requeridas: ['admin', 'tecnico'],
     itens: [
       { label: 'Produção',        href: '/producao',        icone: '🌱', em_breve: true },
       { label: 'Comercialização', href: '/comercializacao', icone: '🤝', em_breve: true },
@@ -33,27 +62,32 @@ const NAV: { grupo: string; itens: NavItem[] }[] = [
   },
   {
     grupo: 'Projetos',
+    funcoes_requeridas: ['admin', 'captador'],
     itens: [
-      { label: 'Projetos',      href: '/projetos', icone: '🎯', em_breve: true },
-      { label: 'Impacto & ESG', href: '/impacto',  icone: '🌿', em_breve: true },
+      { label: 'Projetos',      href: '/projetos',  icone: '🎯', em_breve: true },
+      { label: 'Impacto & ESG', href: '/impacto',   icone: '🌿', em_breve: true },
+      { label: 'Captação',      href: '/captacao',  icone: '🎯', funcoes_requeridas: ['admin', 'captador'], modulo: 'captacao' },
     ],
   },
 ]
+
+const FUNCAO_LABEL: Record<string, string> = {
+  admin:           'Administrador',
+  financeiro:      'Financeiro',
+  tecnico:         'Técnico',
+  conselho_fiscal: 'Conselho Fiscal',
+  captador:        'Captador',
+}
 
 interface Props {
   usuario: (Usuario & { organizacao: Organizacao | null }) | null
 }
 
-function labelRole(role: string | undefined) {
-  switch (role) {
-    case 'super_admin':  return 'Administrador da Plataforma'
-    case 'org_admin':    return 'Administrador'
-    case 'financeiro':   return 'Financeiro'
-    case 'tecnico':      return 'Técnico'
-    case 'cooperado':    return 'Cooperado'
-    case 'parceiro':     return 'Parceiro'
-    default:             return role || ''
-  }
+function labelUsuario(usuario: { role: string; funcoes: string[] } | null | undefined): string {
+  if (!usuario) return ''
+  if (usuario.role === 'super_admin') return 'Administrador da Plataforma'
+  if (!usuario.funcoes?.length) return 'Membro'
+  return FUNCAO_LABEL[usuario.funcoes[0]] || usuario.funcoes[0]
 }
 
 export default function Sidebar({ usuario }: Props) {
@@ -69,6 +103,84 @@ export default function Sidebar({ usuario }: Props) {
 
   const isSuperAdmin = usuario?.role === 'super_admin'
   const org = usuario?.organizacao
+
+  // Proxy para módulo captação enquanto não existe campo modulos_ativos no banco
+  const moduloCaptacaoAtivo = ['agro', 'impacto', 'enterprise', 'profissional'].includes(org?.plano || '')
+
+  function podeVerGrupo(grupo: NavGrupo): boolean {
+    if (!grupo.funcoes_requeridas) return true
+    if (!usuario) return false
+    return temAlgumaFuncao(usuario, grupo.funcoes_requeridas)
+  }
+
+  function podeVerItem(item: NavItem): boolean {
+    if (item.funcoes_requeridas && usuario) {
+      if (!temAlgumaFuncao(usuario, item.funcoes_requeridas)) return false
+    }
+    if (item.modulo === 'captacao') return moduloCaptacaoAtivo
+    return true
+  }
+
+  function renderItem(item: NavItem) {
+    const ativo = item.exact
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(item.href + '/')
+    return (
+      <button key={item.href}
+        onClick={() => !item.em_breve && router.push(item.href)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '8px 1rem', background: ativo ? '#EEEDFE' : 'transparent',
+          border: 'none', cursor: item.em_breve ? 'default' : 'pointer',
+          textAlign: 'left', opacity: item.em_breve ? 0.5 : 1,
+        }}
+        onMouseEnter={e => { if (!ativo && !item.em_breve) (e.currentTarget as HTMLButtonElement).style.background = '#f5f5f2' }}
+        onMouseLeave={e => { if (!ativo) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+      >
+        <span style={{ fontSize: '16px', flexShrink: 0 }}>{item.icone}</span>
+        <span style={{ fontSize: '13px', fontWeight: ativo ? '600' : '400', color: ativo ? '#4840CC' : '#444', flex: 1 }}>
+          {item.label}
+        </span>
+        {item.em_breve && (
+          <span style={{ fontSize: '9px', background: '#f0f0ec', color: '#888', padding: '2px 5px', borderRadius: '4px', fontWeight: '500' }}>
+            em breve
+          </span>
+        )}
+      </button>
+    )
+  }
+
+  function renderGrupo(label: string, itens: NavItem[]) {
+    return (
+      <div key={label} style={{ marginBottom: '0.5rem' }}>
+        <div style={{
+          fontSize: '10px', fontWeight: '600', color: '#aaa',
+          textTransform: 'uppercase', letterSpacing: '0.8px',
+          padding: '0.5rem 1rem 0.25rem',
+        }}>
+          {label}
+        </div>
+        {itens.map(renderItem)}
+      </div>
+    )
+  }
+
+  function renderNav() {
+    if (isSuperAdmin) {
+      return NAV_ADMIN.map(grupo => renderGrupo(grupo.grupo, grupo.itens))
+    }
+
+    return (
+      <>
+        {NAV.filter(podeVerGrupo).map(grupo => {
+          const itens = grupo.itens.filter(podeVerItem)
+          if (itens.length === 0) return null
+          return renderGrupo(grupo.grupo, itens)
+        })}
+        {renderGrupo('Conta', [{ label: 'Configurações', href: '/configuracoes', icone: '⚙️' }])}
+      </>
+    )
+  }
 
   const orgNome = isSuperAdmin
     ? 'NextCoop'
@@ -88,7 +200,7 @@ export default function Sidebar({ usuario }: Props) {
       display: 'flex', flexDirection: 'column',
       fontFamily: 'system-ui, -apple-system, sans-serif', zIndex: 100,
     }}>
-      {/* Cabeçalho org */}
+      {/* Cabeçalho */}
       <div style={{ padding: '1.25rem 1rem', borderBottom: '1px solid #e5e3dc' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
@@ -112,108 +224,7 @@ export default function Sidebar({ usuario }: Props) {
 
       {/* Navegação */}
       <nav style={{ flex: 1, padding: '0.75rem 0', overflowY: 'auto' }}>
-        {isSuperAdmin && (
-          <div style={{ marginBottom: '0.5rem' }}>
-            <div style={{
-              fontSize: '10px', fontWeight: '600', color: '#aaa',
-              textTransform: 'uppercase', letterSpacing: '0.8px',
-              padding: '0.5rem 1rem 0.25rem',
-            }}>
-              Sistema
-            </div>
-            {[{ label: 'Admin', href: '/admin', icone: '⚙️' }].map(item => {
-              const ativo = pathname === item.href || pathname.startsWith(item.href + '/')
-              return (
-                <button key={item.href}
-                  onClick={() => router.push(item.href)}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
-                    padding: '8px 1rem', background: ativo ? '#EEEDFE' : 'transparent',
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
-                  }}
-                  onMouseEnter={e => { if (!ativo) (e.currentTarget as HTMLButtonElement).style.background = '#f5f5f2' }}
-                  onMouseLeave={e => { if (!ativo) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-                >
-                  <span style={{ fontSize: '16px', flexShrink: 0 }}>{item.icone}</span>
-                  <span style={{ fontSize: '13px', fontWeight: ativo ? '600' : '400', color: ativo ? '#4840CC' : '#444' }}>
-                    {item.label}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-
-        {NAV.map(grupo => (
-          <div key={grupo.grupo} style={{ marginBottom: '0.5rem' }}>
-            <div style={{
-              fontSize: '10px', fontWeight: '600', color: '#aaa',
-              textTransform: 'uppercase', letterSpacing: '0.8px',
-              padding: '0.5rem 1rem 0.25rem',
-            }}>
-              {grupo.grupo}
-            </div>
-            {grupo.itens.map(item => {
-              const ativo = pathname === item.href || pathname.startsWith(item.href + '/')
-              return (
-                <button key={item.href}
-                  onClick={() => !item.em_breve && router.push(item.href)}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
-                    padding: '8px 1rem', background: ativo ? '#EEEDFE' : 'transparent',
-                    border: 'none', cursor: item.em_breve ? 'default' : 'pointer',
-                    textAlign: 'left', opacity: item.em_breve ? 0.5 : 1,
-                  }}
-                  onMouseEnter={e => { if (!ativo && !item.em_breve) (e.currentTarget as HTMLButtonElement).style.background = '#f5f5f2' }}
-                  onMouseLeave={e => { if (!ativo) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-                >
-                  <span style={{ fontSize: '16px', flexShrink: 0 }}>{item.icone}</span>
-                  <span style={{ fontSize: '13px', fontWeight: ativo ? '600' : '400', color: ativo ? '#4840CC' : '#444', flex: 1 }}>
-                    {item.label}
-                  </span>
-                  {item.em_breve && (
-                    <span style={{ fontSize: '9px', background: '#f0f0ec', color: '#888', padding: '2px 5px', borderRadius: '4px', fontWeight: '500' }}>
-                      em breve
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        ))}
-
-        {/* Configurações — apenas para org_admin */}
-        {!isSuperAdmin && (
-          <div style={{ marginBottom: '0.5rem' }}>
-            <div style={{
-              fontSize: '10px', fontWeight: '600', color: '#aaa',
-              textTransform: 'uppercase', letterSpacing: '0.8px',
-              padding: '0.5rem 1rem 0.25rem',
-            }}>
-              Conta
-            </div>
-            {(() => {
-              const ativo = pathname === '/configuracoes'
-              return (
-                <button
-                  onClick={() => router.push('/configuracoes')}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
-                    padding: '8px 1rem', background: ativo ? '#EEEDFE' : 'transparent',
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
-                  }}
-                  onMouseEnter={e => { if (!ativo) (e.currentTarget as HTMLButtonElement).style.background = '#f5f5f2' }}
-                  onMouseLeave={e => { if (!ativo) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-                >
-                  <span style={{ fontSize: '16px', flexShrink: 0 }}>⚙️</span>
-                  <span style={{ fontSize: '13px', fontWeight: ativo ? '600' : '400', color: ativo ? '#4840CC' : '#444' }}>
-                    Configurações
-                  </span>
-                </button>
-              )
-            })()}
-          </div>
-        )}
+        {renderNav()}
       </nav>
 
       {/* Rodapé usuário */}
@@ -234,7 +245,7 @@ export default function Sidebar({ usuario }: Props) {
               {usuario?.nome_completo || 'Usuário'}
             </div>
             <div style={{ fontSize: '11px', color: isSuperAdmin ? '#635BFF' : '#888', fontWeight: isSuperAdmin ? '500' : '400' }}>
-              {labelRole(usuario?.role)}
+              {labelUsuario(usuario)}
             </div>
           </div>
         </div>

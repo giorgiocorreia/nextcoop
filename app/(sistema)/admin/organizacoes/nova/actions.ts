@@ -59,7 +59,9 @@ export async function criarOrganizacao(input: CriarOrgInput): Promise<{ error?: 
     .from('usuarios')
     .update({
       organizacao_id: org.id,
-      role: 'org_admin',
+      role: 'membro',
+      funcoes: ['admin'],
+      vinculo: 'diretoria',
       nome_completo: input.admin_nome.trim(),
     })
     .eq('id', authData.user.id)

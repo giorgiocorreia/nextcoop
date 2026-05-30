@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Organizacao, Usuario, RoleUsuario } from '@/types/database'
+import type { Organizacao, Usuario } from '@/types/database'
 
 const PLANO_CONFIG: Record<string, { label: string; cor: string; bg: string }> = {
   gratuito:    { label: 'Gratuito',    cor: '#555',    bg: '#f0eeea' },
@@ -15,8 +15,11 @@ const PLANO_CONFIG: Record<string, { label: string; cor: string; bg: string }> =
   enterprise:  { label: 'Enterprise',  cor: '#854F0B', bg: '#FAEEDA' },
 }
 
-const ROLE_LABEL: Record<RoleUsuario, string> = {
+// Mantém mapa legado (role antigo + novos valores) para display no painel admin
+const ROLE_LABEL: Record<string, string> = {
   super_admin:     'Super Admin',
+  membro:          'Membro',
+  // valores legados — registros migrados ainda podem ter estes roles no banco
   org_admin:       'Administrador',
   financeiro:      'Financeiro',
   tecnico:         'Técnico',
@@ -24,6 +27,17 @@ const ROLE_LABEL: Record<RoleUsuario, string> = {
   conselho_fiscal: 'Conselho Fiscal',
   cooperado:       'Cooperado',
   parceiro:        'Parceiro',
+}
+
+// Retorna o label mais descritivo para o badge de um usuário
+function labelParaUsuario(u: Usuario): string {
+  if (u.role === 'super_admin') return 'Super Admin'
+  const FUNCAO_LABEL: Record<string, string> = {
+    admin: 'Administrador', financeiro: 'Financeiro', tecnico: 'Técnico',
+    conselho_fiscal: 'Conselho Fiscal', captador: 'Captador',
+  }
+  if (u.funcoes?.length) return FUNCAO_LABEL[u.funcoes[0]] || u.funcoes[0]
+  return ROLE_LABEL[u.role] || u.role
 }
 
 const PLANOS = ['gratuito', 'essencial', 'profissional', 'agro', 'enterprise']
@@ -400,10 +414,10 @@ export default function OrgDetalhe({ org: orgInicial, usuarios, totalCooperados,
                     <span style={{
                       display: 'inline-block', padding: '2px 8px',
                       borderRadius: '12px', fontSize: '11px', fontWeight: '600',
-                      color: u.role === 'org_admin' ? '#4840CC' : u.role === 'super_admin' ? '#6366f1' : '#555',
-                      background: u.role === 'org_admin' ? '#EEF0FF' : u.role === 'super_admin' ? '#ede9fe' : '#f5f5f2',
+                      color: u.role === 'super_admin' ? '#6366f1' : u.funcoes?.includes('admin') ? '#4840CC' : '#555',
+                      background: u.role === 'super_admin' ? '#ede9fe' : u.funcoes?.includes('admin') ? '#EEF0FF' : '#f5f5f2',
                     }}>
-                      {ROLE_LABEL[u.role]}
+                      {labelParaUsuario(u)}
                     </span>
                   </td>
                   <td style={{ padding: '10px 16px' }}>

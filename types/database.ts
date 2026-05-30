@@ -2,7 +2,14 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type TipoOrganizacao = 'cooperativa' | 'associacao' | 'central'
 export type PlanoOrganizacao = 'gratuito' | 'essencial' | 'profissional' | 'cooperativa' | 'agro' | 'impacto' | 'enterprise'
-export type RoleUsuario = 'super_admin' | 'org_admin' | 'financeiro' | 'tecnico' | 'comercial' | 'conselho_fiscal' | 'cooperado' | 'parceiro'
+/** Papel estrutural: super_admin (plataforma) ou membro (usuário de uma org). */
+export type RoleUsuario = 'super_admin' | 'membro'
+
+/** Tipo de vínculo da pessoa com a organização. */
+export type VinculoUsuario = 'cooperado' | 'funcionario' | 'diretoria' | 'externo'
+
+/** Função operacional exercida no sistema. */
+export type FuncaoUsuario = 'admin' | 'financeiro' | 'tecnico' | 'conselho_fiscal' | 'captador'
 export type StatusCooperado = 'proposta' | 'probatorio' | 'ativo' | 'inadimplente' | 'suspenso' | 'demitido' | 'excluido'
 export type TipoLancamento = 'receita' | 'despesa' | 'transferencia'
 export type StatusLancamento = 'pendente' | 'pago' | 'cancelado' | 'agendado'
@@ -60,10 +67,23 @@ export interface Usuario {
   telefone: string | null
   avatar_url: string | null
   role: RoleUsuario
+  funcoes: string[]
+  vinculo: VinculoUsuario | null
   ativo: boolean
   ultimo_acesso: string | null
   criado_em: string
   atualizado_em: string
+}
+
+export interface FuncaoDisponivel {
+  id: string
+  organizacao_id: string | null
+  nome: string
+  label: string
+  descricao: string | null
+  modulo: string | null
+  is_padrao: boolean
+  criado_em: string
 }
 
 export interface Cooperado {
@@ -224,14 +244,15 @@ type TableDef<T> = {
 export type Database = {
   public: {
     Tables: {
-      organizacoes: TableDef<Organizacao>
-      usuarios:     TableDef<Usuario>
-      cooperados:   TableDef<Cooperado>
-      lancamentos:  TableDef<Lancamento>
-      assembleias:  TableDef<Assembleia>
-      documentos:    TableDef<Documento>
-      mensalidades:  TableDef<Mensalidade>
-      notificacoes:  TableDef<Notificacao>
+      organizacoes:        TableDef<Organizacao>
+      usuarios:            TableDef<Usuario>
+      cooperados:          TableDef<Cooperado>
+      lancamentos:         TableDef<Lancamento>
+      assembleias:         TableDef<Assembleia>
+      documentos:          TableDef<Documento>
+      mensalidades:        TableDef<Mensalidade>
+      notificacoes:        TableDef<Notificacao>
+      funcoes_disponiveis: TableDef<FuncaoDisponivel>
     }
     Views:          { [_ in never]: never }
     Functions:      { [_ in never]: never }
