@@ -21,6 +21,9 @@ export type StatusMensalidade = 'pendente' | 'pago' | 'vencido'
 
 export type StatusAssinatura = 'active' | 'past_due' | 'canceled' | 'trialing'
 
+export type StatusOportunidade = 'identificado' | 'contatado' | 'proposta' | 'aguardando' | 'aprovado' | 'reprovado' | 'arquivado'
+export type FonteOportunidade  = 'internacional' | 'nacional' | 'manual'
+
 export interface Organizacao {
   id: string
   nome: string
@@ -71,6 +74,54 @@ export interface Usuario {
   vinculo: VinculoUsuario | null
   ativo: boolean
   ultimo_acesso: string | null
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface Oportunidade {
+  id: string
+  organizacao_id: string
+  titulo: string
+  financiador: string
+  fonte: FonteOportunidade
+  fonte_detalhe: string | null
+  fonte_url: string | null
+  area_tematica: string[]
+  valor_estimado: number | null
+  valor_captado: number | null
+  moeda: string
+  status: StatusOportunidade
+  prazo_submissao: string | null
+  prazo_resultado: string | null
+  responsavel_id: string | null
+  observacoes: string | null
+  documentos: Json
+  criado_por: string | null
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface OportunidadeLog {
+  id: string
+  oportunidade_id: string
+  usuario_id: string | null
+  acao: string
+  status_anterior: string | null
+  status_novo: string | null
+  descricao: string | null
+  criado_em: string
+}
+
+export interface PerfilCaptacao {
+  id: string
+  organizacao_id: string
+  areas_tematicas: string[]
+  publicos_alvo: string[]
+  abrangencia: string[]
+  porte_min: number | null
+  porte_max: number | null
+  idiomas: string[]
+  ativo: boolean
   criado_em: string
   atualizado_em: string
 }
@@ -253,6 +304,9 @@ export type Database = {
       mensalidades:        TableDef<Mensalidade>
       notificacoes:        TableDef<Notificacao>
       funcoes_disponiveis: TableDef<FuncaoDisponivel>
+      oportunidades:       TableDef<Oportunidade>
+      oportunidade_logs:   TableDef<OportunidadeLog>
+      perfil_captacao:     TableDef<PerfilCaptacao>
     }
     Views:          { [_ in never]: never }
     Functions:      { [_ in never]: never }

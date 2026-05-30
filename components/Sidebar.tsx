@@ -66,7 +66,7 @@ const NAV: NavGrupo[] = [
     itens: [
       { label: 'Projetos',      href: '/projetos',  icone: '🎯', em_breve: true },
       { label: 'Impacto & ESG', href: '/impacto',   icone: '🌿', em_breve: true },
-      { label: 'Captação',      href: '/captacao',  icone: '🎯', funcoes_requeridas: ['admin', 'captador'], modulo: 'captacao' },
+      { label: 'Captação',      href: '/captacao',  icone: '🎯', funcoes_requeridas: ['admin', 'captador'] },
     ],
   },
 ]

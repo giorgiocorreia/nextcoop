@@ -1,0 +1,49 @@
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { temAlgumaFuncao } from '@/lib/permissoes'
+import type { Oportunidade, Usuario } from '@/types/database'
+import KanbanBoard from '@/components/captacao/KanbanBoard'
+
+export const metadata = { title: 'Captação de Recursos — NextCoop' }
+
+export default async function CaptacaoPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: usuario } = await supabase
+    .from('usuarios')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
+  if (!usuario) redirect('/login')
+  if (!temAlgumaFuncao(usuario, ['admin', 'captador'])) redirect('/dashboard')
+
+  const [
+    { data: oportunidades },
+    { data: todosUsuarios },
+  ] = await Promise.all([
+    supabase
+      .from('oportunidades')
+      .select('*')
+      .neq('status', 'arquivado')
+      .order('prazo_submissao', { ascending: true, nullsFirst: false }),
+    supabase
+      .from('usuarios')
+      .select('id, nome_completo, funcoes')
+      .eq('organizacao_id', usuario.organizacao_id!)
+      .eq('ativo', true),
+  ])
+
+  const responsaveis = (todosUsuarios ?? []).filter(
+    u => u.funcoes?.includes('admin') || u.funcoes?.includes('captador')
+  ) as Pick<Usuario, 'id' | 'nome_completo'>[]
+
+  return (
+    <KanbanBoard
+      oportunidades={(oportunidades ?? []) as Oportunidade[]}
+      responsaveis={responsaveis}
+    />
+  )
+}
