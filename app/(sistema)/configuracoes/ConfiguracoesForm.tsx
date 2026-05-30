@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Organizacao, PerfilCaptacao } from '@/types/database'
+import type { Organizacao, PerfilCaptacao, Usuario } from '@/types/database'
 import { salvarPerfilCaptacao } from '@/lib/captacao/actions'
+import PerfilUsuario from './PerfilUsuario'
 
 const GREEN = '#635BFF'
 const GREEN_DARK = '#4840CC'
@@ -50,12 +51,15 @@ function Label({ children, required }: { children: React.ReactNode; required?: b
 }
 
 interface Props {
-  org: Organizacao
+  org: Organizacao | null
   isSuperAdmin: boolean
   perfilCaptacao: PerfilCaptacao | null
+  usuario: Usuario
 }
 
-export default function ConfiguracoesForm({ org: orgInicial, isSuperAdmin, perfilCaptacao }: Props) {
+export default function ConfiguracoesForm({ org: orgInicial, isSuperAdmin, perfilCaptacao, usuario }: Props) {
+  const isOrgAdmin     = !isSuperAdmin && (usuario.funcoes ?? []).includes('admin')
+  const showOrgSection = isOrgAdmin && orgInicial !== null
   const router = useRouter()
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -63,22 +67,22 @@ export default function ConfiguracoesForm({ org: orgInicial, isSuperAdmin, perfi
 
   // ── Estado do formulário de org ────────────────────────────────────────────
   const [form, setForm] = useState({
-    nome: orgInicial.nome,
-    nome_curto: orgInicial.nome_curto || '',
-    tipo: orgInicial.tipo,
-    cnpj: orgInicial.cnpj || '',
-    email: orgInicial.email || '',
-    telefone: orgInicial.telefone || '',
-    site: orgInicial.site || '',
-    cep: orgInicial.cep || '',
-    logradouro: orgInicial.logradouro || '',
-    numero: orgInicial.numero || '',
-    complemento: orgInicial.complemento || '',
-    bairro: orgInicial.bairro || '',
-    cidade: orgInicial.cidade || '',
-    estado: orgInicial.estado || '',
-    data_fundacao: orgInicial.data_fundacao || '',
-    registro_juceb: orgInicial.registro_juceb || '',
+    nome:           orgInicial?.nome          ?? '',
+    nome_curto:     orgInicial?.nome_curto    ?? '',
+    tipo:           orgInicial?.tipo          ?? 'cooperativa',
+    cnpj:           orgInicial?.cnpj          ?? '',
+    email:          orgInicial?.email         ?? '',
+    telefone:       orgInicial?.telefone      ?? '',
+    site:           orgInicial?.site          ?? '',
+    cep:            orgInicial?.cep           ?? '',
+    logradouro:     orgInicial?.logradouro    ?? '',
+    numero:         orgInicial?.numero        ?? '',
+    complemento:    orgInicial?.complemento   ?? '',
+    bairro:         orgInicial?.bairro        ?? '',
+    cidade:         orgInicial?.cidade        ?? '',
+    estado:         orgInicial?.estado        ?? '',
+    data_fundacao:  orgInicial?.data_fundacao ?? '',
+    registro_juceb: orgInicial?.registro_juceb ?? '',
   })
 
   const set = (campo: keyof typeof form) => (
@@ -105,6 +109,7 @@ export default function ConfiguracoesForm({ org: orgInicial, isSuperAdmin, perfi
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!orgInicial) return
     setSalvando(true)
     setErro('')
     setSucesso('')
@@ -136,7 +141,7 @@ export default function ConfiguracoesForm({ org: orgInicial, isSuperAdmin, perfi
     const { error } = await supabase
       .from('organizacoes')
       .update(payload as any)
-      .eq('id', orgInicial.id)
+      .eq('id', orgInicial!.id)
 
     if (error) {
       setErro('Erro ao salvar. Tente novamente.')
@@ -204,8 +209,16 @@ export default function ConfiguracoesForm({ org: orgInicial, isSuperAdmin, perfi
     <div style={{ maxWidth: '760px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '20px', fontWeight: '600', color: '#1a1a1a', margin: 0 }}>Configurações</h1>
-        <p style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>Dados cadastrais da organização</p>
+        <p style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
+          {showOrgSection ? 'Perfil pessoal e dados da organização' : 'Perfil pessoal'}
+        </p>
       </div>
+
+      {/* Perfil do usuário — visível para todos */}
+      <PerfilUsuario usuario={usuario} />
+
+      {/* Seções de org — visíveis apenas para admins da org */}
+      {showOrgSection && <>
 
       {erro && <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#dc2626', marginBottom: '1rem' }}>{erro}</div>}
       {sucesso && <div style={{ background: '#EEF0FF', border: '1px solid #635BFF33', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: GREEN_DARK, marginBottom: '1rem' }}>✓ {sucesso}</div>}
@@ -578,6 +591,8 @@ export default function ConfiguracoesForm({ org: orgInicial, isSuperAdmin, perfi
           {salvandoPerfil ? 'Salvando...' : 'Salvar perfil de captação'}
         </button>
       </div>
+
+      </>}
     </div>
   )
 }
