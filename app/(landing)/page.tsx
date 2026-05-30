@@ -116,7 +116,7 @@ const PLANOS = [
 ]
 
 const DIFERENCIAIS = [
-  { titulo: 'Feita para o cooperativismo', desc: 'Desenvolvida com foco nas necessidades reais de cooperativas e associações brasileiras.' },
+  { titulo: 'Feita para você!', desc: 'Desenvolvida para cooperativas, associações e organizações coletivas do Brasil.' },
   { titulo: '100% em nuvem', desc: 'Acesse de qualquer lugar, em qualquer dispositivo, com segurança e sem instalações.' },
   { titulo: 'Começa gratuito', desc: 'Plano gratuito para até 10 filiados — sem cartão, sem compromisso, sem limite de tempo.' },
   { titulo: 'Suporte próximo', desc: 'Time especializado que acompanha cada etapa da implantação e uso do sistema.' },
@@ -246,7 +246,7 @@ function Hero() {
             {' '}cooperativas e associações
           </h1>
           <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.75)', lineHeight: 1.7, marginBottom: '2rem', maxWidth: 480 }}>
-            Controle filiados, finanças, assembleias e documentos em uma plataforma simples, segura e feita para o cooperativismo brasileiro.
+            Controle filiados, finanças, assembleias e documentos em uma plataforma simples, segura e feita para cooperativas e associações brasileiras.
           </p>
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <a href="#demo" style={{ padding: '14px 28px', borderRadius: 10, fontSize: 15, fontWeight: 700, color: '#0D2B5E', background: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -369,7 +369,7 @@ function Funcionalidades() {
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <RotuloSecao>Funcionalidades</RotuloSecao>
         <h2 style={estiloTituloSecao}>
-          Tudo que sua cooperativa precisa em{' '}
+          Tudo que sua organização precisa em{' '}
           <em style={estiloDestaque}>um só lugar</em>
         </h2>
         <p style={estiloDescSecao}>Plataforma integrada que conecta pessoas, processos e dados para uma gestão mais eficiente, transparente e estratégica.</p>
@@ -407,7 +407,7 @@ function PorQueNextCoop() {
             <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg,#1565C0,#06B6D4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: '#fff', fontFamily: "'Sora',sans-serif", flexShrink: 0 }}>CA</div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Gestão COOPAIBI</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>Cooperativa dos Apicultores do Ibirapitanga</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>Cooperativa Mista Agropecuária de Ibirataia</div>
             </div>
           </div>
         </div>
@@ -637,7 +637,7 @@ function CTAFinal() {
           Pronto para transformar a gestão da sua cooperativa ou associação?
         </h2>
         <p style={{ fontSize: 16, color: '#64748B', marginBottom: '2rem', lineHeight: 1.6 }}>
-          Explore o sistema gratuitamente e descubra como a NextCoop pode organizar, digitalizar e fortalecer sua organização.
+          Explore o sistema gratuitamente e descubra como a NextCoop pode organizar, digitalizar e fortalecer sua cooperativa ou associação.
         </p>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <a href="#demo" style={{ padding: '14px 32px', borderRadius: 10, fontSize: 16, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg,#1565C0,#06B6D4)', textDecoration: 'none' }}>
