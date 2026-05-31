@@ -299,69 +299,35 @@ interface ParsedEdital {
   motivo?: string
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function buildPrompt(perfil: PerfilCaptacao | null, nomeFonte: string, texto: string): string {
+function buildWebSearchPrompt(perfil: PerfilCaptacao | null, url: string): string {
   const p = perfil
-  const perfilTxt = p
-    ? [
-        `Áreas temáticas de interesse: ${p.areas_tematicas?.join(', ') || 'não informado'}`,
-        `Público-alvo: ${p.publicos_alvo?.join(', ') || 'não informado'}`,
-        `Abrangência geográfica: ${p.abrangencia?.join(', ') || 'não informado'}`,
-        `Municípios: ${p.municipios?.join(', ') || 'não informado'}`,
-        `Porte mínimo de projeto: ${p.porte_min != null ? `R$ ${p.porte_min.toLocaleString('pt-BR')}` : 'não informado'}`,
-        `Porte máximo de projeto: ${p.porte_max != null ? `R$ ${p.porte_max.toLocaleString('pt-BR')}` : 'não informado'}`,
-        `Idiomas aceitos: ${p.idiomas?.join(', ') || 'português'}`,
-        `Descrição da organização: ${p.descricao_org || 'cooperativa ou associação brasileira'}`,
-      ].join('\n')
-    : 'Perfil não configurado — avalie de forma geral para cooperativas e associações brasileiras.'
+  const perfilJson = p
+    ? {
+        areas_tematicas: p.areas_tematicas ?? [],
+        publicos_alvo:   p.publicos_alvo ?? [],
+        abrangencia:     p.abrangencia ?? [],
+        municipios:      p.municipios ?? [],
+        porte_min:       p.porte_min ?? null,
+        porte_max:       p.porte_max ?? null,
+        idiomas:         p.idiomas ?? ['pt'],
+        descricao_org:   p.descricao_org ?? 'cooperativa ou associação brasileira',
+      }
+    : null
 
-  return `Você é especialista em captação de recursos para cooperativas e associações brasileiras.
+  return `Acesse a URL ${url} e extraia todos os editais, chamadas públicas e oportunidades de financiamento listados.
 
-Analise o conteúdo da página "${nomeFonte}" abaixo e identifique todos os editais, chamadas públicas e oportunidades de financiamento presentes.
+Para cada um compare com este perfil de organização:
+${JSON.stringify(perfilJson, null, 2)}
 
-PERFIL DA ORGANIZAÇÃO:
-${perfilTxt}
+Calcule a compatibilidade:
+- score 70–100 → compatibilidade: "compativel"
+- score 40–69  → compatibilidade: "parcial"
+- score 0–39   → compatibilidade: "incompativel"
 
-Para cada oportunidade encontrada, calcule a compatibilidade com o perfil acima:
-- score 70–100 → compatibilidade: "compativel" (forte alinhamento de área, público e porte)
-- score 40–69  → compatibilidade: "parcial"     (algum alinhamento, mas com limitações)
-- score 0–39   → compatibilidade: "incompativel" (pouco ou nenhum alinhamento)
+Retorne SOMENTE JSON válido, sem markdown, sem texto fora do JSON:
+{"editais":[{"titulo":"string","financiador":"string ou null","descricao":"resumo em 2-3 frases","url_edital":"URL ou null","valor_estimado":numero_ou_null,"prazo_submissao":"YYYY-MM-DD ou null","areas_tematicas":[],"publico_alvo":[],"score":0,"compatibilidade":"parcial","motivo":"explicação"}]}
 
-Responda SOMENTE com JSON válido, sem markdown, sem texto fora do JSON:
-{
-  "editais": [
-    {
-      "titulo": "string",
-      "financiador": "string ou null",
-      "descricao": "resumo em 2–3 frases",
-      "url_edital": "URL direta ou null",
-      "valor_estimado": número ou null,
-      "prazo_submissao": "YYYY-MM-DD ou null",
-      "areas_tematicas": ["array de strings"],
-      "publico_alvo": ["array de strings"],
-      "score": 0-100,
-      "compatibilidade": "compativel|parcial|incompativel",
-      "motivo": "explicação da compatibilidade em 1–2 frases"
-    }
-  ]
-}
-
-Se não encontrar editais, retorne: {"editais":[]}
-
-CONTEÚDO DA PÁGINA:
-${texto}`
+Se não encontrar editais, retorne: {"editais":[]}`
 }
 
 export async function executarRadar() {
@@ -397,62 +363,55 @@ export async function executarRadar() {
         .eq('fonte_id', fonte.id)
         .eq('adicionado_ao_pipeline', false)
 
-      // ── 2. Fetch da URL ──────────────────────────────────────────────────────
-      let texto = ''
-      try {
-        const resp = await fetch(fonte.url, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NextCoop/1.0)' },
-          signal: AbortSignal.timeout(15000),
-        })
-        console.log(`[Radar] Fetch → HTTP ${resp.status} ${resp.statusText}`)
-        const html = await resp.text()
-        console.log(`[Radar] HTML recebido: ${html.length} chars`)
-        texto = stripHtml(html).slice(0, 6000)
-        console.log(`[Radar] Texto após strip: ${texto.length} chars | início: "${texto.slice(0, 150).replace(/\n/g, ' ')}"`)
-      } catch (fetchErr) {
-        const msg = `[${fonte.nome}] Fetch falhou: ${fetchErr}`
-        console.error('[Radar]', msg)
-        errosPorFonte.push(msg)
-        continue
-      }
-
-      if (!texto.trim()) {
-        const msg = `[${fonte.nome}] Texto vazio após strip do HTML`
-        console.warn('[Radar]', msg)
-        errosPorFonte.push(msg)
-        continue
-      }
-
-      // ── 3. Claude ────────────────────────────────────────────────────────────
+      // ── 2. Claude com web_search (sem fetch direto) ──────────────────────────
       let editais: ParsedEdital[] = []
       try {
-        console.log(`[Radar] Enviando ${texto.length} chars para Claude (claude-sonnet-4-6)...`)
+        console.log(`[Radar] Chamando Claude com web_search para ${fonte.url}...`)
         const msg = await client.messages.create({
-          model: 'claude-sonnet-4-6',
+          model:      'claude-sonnet-4-6',
           max_tokens: 4096,
-          messages: [{ role: 'user', content: buildPrompt(perfil as PerfilCaptacao | null, fonte.nome, texto) }],
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tools:    [{ type: 'web_search_20250305', name: 'web_search' }] as any,
+          messages: [{ role: 'user', content: buildWebSearchPrompt(perfil as PerfilCaptacao | null, fonte.url) }],
         })
 
-        const raw = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-        console.log(`[Radar] Resposta bruta do Claude (${raw.length} chars):`, raw.slice(0, 500))
+        console.log(`[Radar] stop_reason=${msg.stop_reason} | blocos=${msg.content.length}`)
 
-        const clean = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+        // Concatena todos os blocos de texto (pode haver blocos web_search_result entre eles)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw = msg.content
+          .filter(b => b.type === 'text')
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map(b => (b as any).text as string)
+          .join('\n')
+        console.log(`[Radar] Texto total (${raw.length} chars):`, raw.slice(0, 500))
+
+        // Extrai o bloco JSON da resposta (ignora texto antes/depois)
+        const clean  = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+        const match  = clean.match(/\{[\s\S]*\}/)
+        if (!match) {
+          const errMsg = `[${fonte.nome}] JSON não encontrado na resposta: ${clean.slice(0, 200)}`
+          console.warn('[Radar]', errMsg)
+          errosPorFonte.push(errMsg)
+          continue
+        }
+
         let parsed: { editais?: ParsedEdital[] }
         try {
-          parsed = JSON.parse(clean)
+          parsed = JSON.parse(match[0])
         } catch (parseErr) {
-          const msg = `[${fonte.nome}] JSON.parse falhou: ${parseErr} | texto recebido: ${clean.slice(0, 200)}`
-          console.error('[Radar]', msg)
-          errosPorFonte.push(msg)
+          const errMsg = `[${fonte.nome}] JSON.parse falhou: ${parseErr} | trecho: ${match[0].slice(0, 200)}`
+          console.error('[Radar]', errMsg)
+          errosPorFonte.push(errMsg)
           continue
         }
 
         editais = parsed.editais ?? []
         console.log(`[Radar] Editais extraídos para "${fonte.nome}": ${editais.length}`)
       } catch (claudeErr) {
-        const msg = `[${fonte.nome}] Chamada ao Claude falhou: ${claudeErr}`
-        console.error('[Radar]', msg)
-        errosPorFonte.push(msg)
+        const errMsg = `[${fonte.nome}] Chamada ao Claude falhou: ${claudeErr}`
+        console.error('[Radar]', errMsg)
+        errosPorFonte.push(errMsg)
         continue
       }
 
