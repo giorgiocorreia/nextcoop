@@ -347,7 +347,7 @@ Retorne SOMENTE JSON válido, sem markdown, sem texto fora do JSON:
 Se não encontrar editais, retorne: {"editais":[]}`
 }
 
-export async function executarRadar() {
+export async function executarRadar(modo: 'completo' | 'novidades' = 'novidades') {
   try {
     const { supabase, orgId } = await getCtx()
 
@@ -356,6 +356,7 @@ export async function executarRadar() {
     console.log('[Radar] ANTHROPIC_API_KEY:', apiKey
       ? `definida (${apiKey.length} chars, prefixo: ${apiKey.slice(0, 14)}...)`
       : 'INDEFINIDA ⚠️ — varredura vai falhar')
+    console.log('[Radar] Modo:', modo)
 
     const [{ data: perfil }, { data: fontes }] = await Promise.all([
       supabase.from('perfil_captacao').select('*').eq('organizacao_id', orgId).maybeSingle(),
@@ -365,22 +366,39 @@ export async function executarRadar() {
     console.log('[Radar] Fontes ativas encontradas:', fontes?.length ?? 0)
     if (!fontes?.length) return { error: 'Nenhuma fonte ativa cadastrada' }
 
+    // ── 2. Para modo novidades: carrega URLs já existentes ────────────────────
+    let urlsExistentes = new Set<string>()
+    if (modo === 'novidades') {
+      const { data: existentes } = await supabase
+        .from('radar_resultados')
+        .select('url_edital')
+        .eq('organizacao_id', orgId)
+        .not('url_edital', 'is', null)
+      urlsExistentes = new Set(
+        (existentes ?? []).map(r => r.url_edital).filter((u): u is string => u != null)
+      )
+      console.log('[Radar] URLs já existentes:', urlsExistentes.size)
+    }
+
     const client = new Anthropic({ apiKey })
     const admin  = createAdminClient()
     const agora  = new Date().toISOString()
     const errosPorFonte: string[] = []
+    const allNovosIds: string[] = []
 
     for (const fonte of fontes) {
       console.log(`[Radar] ── Fonte: "${fonte.nome}" | ${fonte.url}`)
 
-      // Limpa resultados antigos não adicionados ao pipeline
-      await admin
-        .from('radar_resultados')
-        .delete()
-        .eq('fonte_id', fonte.id)
-        .eq('adicionado_ao_pipeline', false)
+      if (modo === 'completo') {
+        // Limpa resultados antigos não adicionados ao pipeline
+        await admin
+          .from('radar_resultados')
+          .delete()
+          .eq('fonte_id', fonte.id)
+          .eq('adicionado_ao_pipeline', false)
+      }
 
-      // ── 2. Claude com web_search (sem fetch direto) ──────────────────────────
+      // ── 3. Claude com web_search ───────────────────────────────────────────
       let editais: ParsedEdital[] = []
       try {
         console.log(`[Radar] Chamando Claude com web_search para ${fonte.url}...`)
@@ -394,7 +412,6 @@ export async function executarRadar() {
 
         console.log(`[Radar] stop_reason=${msg.stop_reason} | blocos=${msg.content.length}`)
 
-        // Concatena todos os blocos de texto (pode haver blocos web_search_result entre eles)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw = msg.content
           .filter(b => b.type === 'text')
@@ -403,7 +420,6 @@ export async function executarRadar() {
           .join('\n')
         console.log(`[Radar] Texto total (${raw.length} chars):`, raw.slice(0, 500))
 
-        // Extrai o bloco JSON da resposta (ignora texto antes/depois)
         const clean  = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
         const match  = clean.match(/\{[\s\S]*\}/)
         if (!match) {
@@ -432,7 +448,14 @@ export async function executarRadar() {
         continue
       }
 
-      // Salva resultados via admin (RLS de radar_resultados não tem with check)
+      // ── 4. Para modo novidades: filtra apenas editais com URLs novas ────────
+      if (modo === 'novidades') {
+        const antes = editais.length
+        editais = editais.filter(e => !e.url_edital || !urlsExistentes.has(e.url_edital))
+        console.log(`[Radar] "${fonte.nome}" — ${antes} encontrados, ${editais.length} novos após filtragem`)
+      }
+
+      // ── 5. Salva resultados via admin ──────────────────────────────────────
       const inserts = editais.map(edital => ({
         organizacao_id: orgId,
         fonte_id:        fonte.id,
@@ -451,33 +474,41 @@ export async function executarRadar() {
       }))
 
       if (inserts.length > 0) {
-        const { error: insertErr } = await admin.from('radar_resultados').insert(inserts)
+        const { data: inserted, error: insertErr } = await admin
+          .from('radar_resultados')
+          .insert(inserts)
+          .select('id')
         if (insertErr) {
           console.error(`[Radar] Insert falhou para "${fonte.nome}":`, insertErr.message)
           errosPorFonte.push(`[${fonte.nome}] Insert falhou: ${insertErr.message}`)
-        } else {
-          console.log(`[Radar] "${fonte.nome}" — ${inserts.length} editais inseridos`)
+        } else if (inserted) {
+          allNovosIds.push(...inserted.map(r => r.id))
+          // Atualiza o set local para evitar duplicatas entre fontes
+          editais.forEach(e => { if (e.url_edital) urlsExistentes.add(e.url_edital) })
+          console.log(`[Radar] "${fonte.nome}" — ${inserted.length} editais inseridos`)
         }
       }
 
-      // Atualiza ultima_varredura via admin (RLS de radar_fontes não tem with check)
       await admin.from('radar_fontes').update({ ultima_varredura: agora }).eq('id', fonte.id)
     }
 
-    // Retorna todos os resultados atuais ordenados por score
     const { data: allResults } = await supabase
       .from('radar_resultados')
       .select('*')
       .eq('organizacao_id', orgId)
       .order('score', { ascending: false })
 
-    console.log('[Radar] Varredura concluída. Total de resultados:', allResults?.length ?? 0)
+    console.log('[Radar] Varredura concluída. Total de resultados:', allResults?.length ?? 0, '| Novos:', allNovosIds.length)
     if (errosPorFonte.length) console.warn('[Radar] Erros por fonte:', errosPorFonte)
 
     revalidatePath('/captacao')
     return {
       data:     (allResults ?? []) as RadarResultado[],
+      novosIds: allNovosIds,
       warnings: errosPorFonte.length ? errosPorFonte : undefined,
+      mensagem: allNovosIds.length === 0 && modo === 'novidades'
+        ? 'Nenhuma novidade desde a última varredura'
+        : undefined,
     }
   } catch (e) {
     console.error('[Radar] Erro geral não capturado:', e)
