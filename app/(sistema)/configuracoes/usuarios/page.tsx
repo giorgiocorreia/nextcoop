@@ -1,0 +1,51 @@
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { isAdmin, isSuperAdmin } from '@/lib/permissoes'
+import type { FuncaoDisponivel, Usuario } from '@/types/database'
+import UsuariosGestao from './UsuariosGestao'
+
+export const metadata = { title: 'Usuários — NextCoop' }
+
+export default async function UsuariosPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: usuarioAtual } = await supabase
+    .from('usuarios')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
+  if (!usuarioAtual) redirect('/login')
+  if (!isAdmin(usuarioAtual) && !isSuperAdmin(usuarioAtual)) redirect('/configuracoes')
+
+  let usuarios: Usuario[] = []
+  let funcoes: FuncaoDisponivel[] = []
+
+  if (usuarioAtual.organizacao_id) {
+    const [usersRes, funcoesRes] = await Promise.all([
+      supabase
+        .from('usuarios')
+        .select('*')
+        .eq('organizacao_id', usuarioAtual.organizacao_id)
+        .order('nome_completo'),
+      supabase
+        .from('funcoes_disponiveis')
+        .select('*')
+        .or(`organizacao_id.is.null,organizacao_id.eq.${usuarioAtual.organizacao_id}`)
+        .order('nome'),
+    ])
+    usuarios = (usersRes.data ?? []) as Usuario[]
+    funcoes  = (funcoesRes.data ?? []) as FuncaoDisponivel[]
+  }
+
+  return (
+    <UsuariosGestao
+      usuarios={usuarios}
+      funcoes={funcoes}
+      usuarioAtualId={user.id}
+      isSuperAdmin={isSuperAdmin(usuarioAtual)}
+    />
+  )
+}

@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import type { Organizacao, PerfilCaptacao, Usuario } from '@/types/database'
+import { salvarOrganizacao } from './actions'
 import { salvarPerfilCaptacao } from '@/lib/captacao/actions'
 import PerfilUsuario from './PerfilUsuario'
 
@@ -114,37 +114,10 @@ export default function ConfiguracoesForm({ org: orgInicial, isSuperAdmin, perfi
     setErro('')
     setSucesso('')
 
-    const supabase = createClient()
+    const res = await salvarOrganizacao(form)
 
-    const payload: Record<string, unknown> = {
-      email: form.email.trim() || undefined,
-      telefone: form.telefone.trim() || undefined,
-      site: form.site.trim() || undefined,
-      cep: form.cep.replace(/\D/g, '') || undefined,
-      logradouro: form.logradouro.trim() || undefined,
-      numero: form.numero.trim() || undefined,
-      complemento: form.complemento.trim() || undefined,
-      bairro: form.bairro.trim() || undefined,
-      cidade: form.cidade.trim() || undefined,
-      estado: form.estado || undefined,
-    }
-
-    if (isSuperAdmin) {
-      payload.nome = form.nome.trim()
-      payload.nome_curto = form.nome_curto.trim() || undefined
-      payload.tipo = form.tipo
-      payload.cnpj = form.cnpj.replace(/\D/g, '') || undefined
-      payload.data_fundacao = form.data_fundacao || undefined
-      payload.registro_juceb = form.registro_juceb.trim() || undefined
-    }
-
-    const { error } = await supabase
-      .from('organizacoes')
-      .update(payload as any)
-      .eq('id', orgInicial!.id)
-
-    if (error) {
-      setErro('Erro ao salvar. Tente novamente.')
+    if (res.error) {
+      setErro('Erro ao salvar: ' + res.error)
     } else {
       setSucesso('Dados salvos com sucesso.')
       setTimeout(() => setSucesso(''), 3000)

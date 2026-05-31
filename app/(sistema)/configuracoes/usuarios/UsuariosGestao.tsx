@@ -1,0 +1,504 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import type { FuncaoDisponivel, Usuario, VinculoUsuario } from '@/types/database'
+import { atualizarUsuario, convidarUsuario, toggleAtivo } from './actions'
+
+const GREEN = '#635BFF'
+const GREEN_DARK = '#4840CC'
+const TEAL = '#1D9E75'
+
+const VINCULO_OPTIONS: { value: VinculoUsuario; label: string }[] = [
+  { value: 'cooperado',   label: 'Cooperado' },
+  { value: 'funcionario', label: 'Funcionário' },
+  { value: 'diretoria',   label: 'Diretoria' },
+  { value: 'externo',     label: 'Externo' },
+]
+
+const VINCULO_LABEL: Record<string, string> = {
+  cooperado: 'Cooperado', funcionario: 'Funcionário', diretoria: 'Diretoria', externo: 'Externo',
+}
+
+const FUNCAO_LABEL: Record<string, string> = {
+  admin: 'Administrador', financeiro: 'Financeiro', tecnico: 'Técnico',
+  conselho_fiscal: 'Conselho Fiscal', captador: 'Captador',
+}
+
+interface Props {
+  usuarios: Usuario[]
+  funcoes: FuncaoDisponivel[]
+  usuarioAtualId: string
+  isSuperAdmin: boolean
+}
+
+export default function UsuariosGestao({ usuarios: usuariosInit, funcoes, usuarioAtualId, isSuperAdmin }: Props) {
+  const router = useRouter()
+  const [usuarios, setUsuarios] = useState(usuariosInit)
+  const [busca, setBusca] = useState('')
+
+  // Convite
+  const [conviteAberto, setConviteAberto] = useState(false)
+  const [convite, setConvite] = useState({ nome: '', email: '', vinculo: '', funcoes: [] as string[] })
+  const [enviandoConvite, setEnviandoConvite] = useState(false)
+  const [erroConvite, setErroConvite] = useState('')
+  const [okConvite, setOkConvite] = useState('')
+
+  // Edição inline
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ funcoes: [] as string[], vinculo: '' })
+  const [salvandoId, setSalvandoId] = useState<string | null>(null)
+  const [erroEditar, setErroEditar] = useState('')
+
+  // Toggle ativo
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [erroToggle, setErroToggle] = useState('')
+
+  const filtrados = useMemo(() => {
+    const q = busca.toLowerCase().trim()
+    const lista = q
+      ? usuarios.filter(u => u.nome_completo.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+      : [...usuarios]
+    return lista.sort((a, b) => {
+      if (a.ativo !== b.ativo) return a.ativo ? -1 : 1
+      return a.nome_completo.localeCompare(b.nome_completo, 'pt-BR')
+    })
+  }, [usuarios, busca])
+
+  const totalAtivos = usuarios.filter(u => u.ativo).length
+
+  function abrirEdicao(u: Usuario) {
+    setEditandoId(u.id)
+    setEditForm({ funcoes: [...(u.funcoes ?? [])], vinculo: u.vinculo ?? '' })
+    setErroEditar('')
+  }
+
+  function toggleFuncaoEdit(nome: string) {
+    setEditForm(prev => ({
+      ...prev,
+      funcoes: prev.funcoes.includes(nome)
+        ? prev.funcoes.filter(f => f !== nome)
+        : [...prev.funcoes, nome],
+    }))
+  }
+
+  function toggleFuncaoConvite(nome: string) {
+    setConvite(prev => ({
+      ...prev,
+      funcoes: prev.funcoes.includes(nome)
+        ? prev.funcoes.filter(f => f !== nome)
+        : [...prev.funcoes, nome],
+    }))
+  }
+
+  async function salvarEdicao(id: string) {
+    setSalvandoId(id)
+    setErroEditar('')
+    const res = await atualizarUsuario(id, {
+      funcoes: editForm.funcoes,
+      vinculo: (editForm.vinculo || null) as VinculoUsuario | null,
+    })
+    setSalvandoId(null)
+    if (res.error) { setErroEditar(res.error); return }
+    setUsuarios(prev => prev.map(u =>
+      u.id === id ? { ...u, funcoes: editForm.funcoes, vinculo: (editForm.vinculo || null) as VinculoUsuario | null } : u
+    ))
+    setEditandoId(null)
+    router.refresh()
+  }
+
+  async function handleToggleAtivo(id: string, ativoAtual: boolean) {
+    setTogglingId(id)
+    setErroToggle('')
+    const res = await toggleAtivo(id, !ativoAtual)
+    setTogglingId(null)
+    if (res.error) { setErroToggle(res.error); return }
+    setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ativo: !ativoAtual } : u))
+  }
+
+  async function handleConvidar() {
+    if (!convite.nome.trim()) { setErroConvite('Informe o nome.'); return }
+    if (!convite.email.trim()) { setErroConvite('Informe o e-mail.'); return }
+    setEnviandoConvite(true)
+    setErroConvite('')
+    setOkConvite('')
+    const res = await convidarUsuario({ ...convite, vinculo: convite.vinculo as VinculoUsuario | '' })
+    setEnviandoConvite(false)
+    if (res.error) { setErroConvite(res.error); return }
+    setOkConvite(`Convite enviado para ${convite.email}.`)
+    setConvite({ nome: '', email: '', vinculo: '', funcoes: [] })
+    setTimeout(() => { setOkConvite(''); setConviteAberto(false) }, 4000)
+    router.refresh()
+  }
+
+  return (
+    <div style={{ maxWidth: '760px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={{ fontSize: '20px', fontWeight: '600', color: '#1a1a1a', margin: 0 }}>Usuários</h1>
+          <p style={{ fontSize: '13px', color: '#888', marginTop: '4px', marginBottom: 0 }}>
+            {totalAtivos} membro{totalAtivos !== 1 ? 's' : ''} ativo{totalAtivos !== 1 ? 's' : ''}
+            {usuarios.length > totalAtivos && ` · ${usuarios.length - totalAtivos} inativo${usuarios.length - totalAtivos !== 1 ? 's' : ''}`}
+          </p>
+        </div>
+        <button
+          onClick={() => { setConviteAberto(v => !v); setErroConvite(''); setOkConvite('') }}
+          style={{
+            padding: '8px 16px',
+            background: conviteAberto ? '#f0eeea' : GREEN,
+            color: conviteAberto ? '#555' : '#fff',
+            border: conviteAberto ? '1px solid #d5d3cc' : 'none',
+            borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+          }}
+        >
+          {conviteAberto ? 'Cancelar' : '+ Convidar usuário'}
+        </button>
+      </div>
+
+      {/* Erro de toggle */}
+      {erroToggle && (
+        <Alerta tipo="erro" style={{ marginBottom: '1rem' }}>{erroToggle}</Alerta>
+      )}
+
+      {/* Formulário de convite */}
+      {conviteAberto && (
+        <div style={{ background: '#fff', border: '1px solid #e5e3dc', borderRadius: '12px', padding: '1.25rem', marginBottom: '1rem' }}>
+          <div style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a1a', marginBottom: '1rem' }}>Convidar novo usuário</div>
+          <p style={{ fontSize: '12px', color: '#888', marginTop: '-8px', marginBottom: '1rem' }}>
+            O usuário receberá um e-mail com o link de acesso.
+          </p>
+
+          {erroConvite && <Alerta tipo="erro" style={{ marginBottom: '12px' }}>{erroConvite}</Alerta>}
+          {okConvite   && <Alerta tipo="ok"  style={{ marginBottom: '12px' }}>✓ {okConvite}</Alerta>}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div>
+              <FieldLabel required>Nome completo</FieldLabel>
+              <input
+                value={convite.nome}
+                onChange={e => setConvite(p => ({ ...p, nome: e.target.value }))}
+                placeholder="Nome do usuário"
+                style={inp}
+                onFocus={e => e.target.style.borderColor = GREEN}
+                onBlur={e => e.target.style.borderColor = '#d5d3cc'}
+              />
+            </div>
+            <div>
+              <FieldLabel required>E-mail</FieldLabel>
+              <input
+                type="email"
+                value={convite.email}
+                onChange={e => setConvite(p => ({ ...p, email: e.target.value }))}
+                placeholder="email@exemplo.com"
+                style={inp}
+                onFocus={e => e.target.style.borderColor = GREEN}
+                onBlur={e => e.target.style.borderColor = '#d5d3cc'}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '14px' }}>
+            <FieldLabel>Vínculo</FieldLabel>
+            <select
+              value={convite.vinculo}
+              onChange={e => setConvite(p => ({ ...p, vinculo: e.target.value }))}
+              style={{ ...inp, width: '220px' }}
+            >
+              <option value="">Selecionar...</option>
+              {VINCULO_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <FieldLabel>Funções</FieldLabel>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+              {funcoes.map(f => {
+                const sel = convite.funcoes.includes(f.nome)
+                return (
+                  <button
+                    key={f.nome} type="button"
+                    onClick={() => toggleFuncaoConvite(f.nome)}
+                    style={{
+                      fontSize: '12px', padding: '4px 12px', borderRadius: '12px',
+                      border: `1px solid ${sel ? GREEN : '#d5d3cc'}`,
+                      background: sel ? '#EEF0FF' : '#fff',
+                      color: sel ? GREEN_DARK : '#555',
+                      cursor: 'pointer', fontWeight: sel ? '600' : '400',
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleConvidar}
+            disabled={enviandoConvite}
+            style={{
+              padding: '9px 20px', background: enviandoConvite ? '#9F9BFF' : GREEN,
+              color: '#fff', border: 'none', borderRadius: '8px',
+              fontSize: '13px', fontWeight: '600',
+              cursor: enviandoConvite ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {enviandoConvite ? 'Enviando...' : 'Enviar convite'}
+          </button>
+        </div>
+      )}
+
+      {/* Busca */}
+      <div style={{ marginBottom: '1rem' }}>
+        <input
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          placeholder="Buscar por nome ou e-mail..."
+          style={{ ...inp, background: '#fff' }}
+          onFocus={e => e.target.style.borderColor = GREEN}
+          onBlur={e => e.target.style.borderColor = '#d5d3cc'}
+        />
+      </div>
+
+      {/* Lista */}
+      {filtrados.length === 0 ? (
+        <div style={{
+          background: '#fff', border: '1px solid #e5e3dc', borderRadius: '12px',
+          padding: '3rem', textAlign: 'center', color: '#888', fontSize: '13px',
+        }}>
+          {busca ? 'Nenhum usuário encontrado.' : 'Nenhum usuário cadastrado.'}
+        </div>
+      ) : (
+        <div style={{ background: '#fff', border: '1px solid #e5e3dc', borderRadius: '12px', overflow: 'hidden' }}>
+          {filtrados.map((u, i) => {
+            const isSelf        = u.id === usuarioAtualId
+            const isSuperAdminRow = u.role === 'super_admin'
+            const podeEditar    = !isSuperAdminRow
+            const editando      = editandoId === u.id
+            const toggling      = togglingId === u.id
+            const salvando      = salvandoId === u.id
+            const iniciais      = u.nome_completo.split(' ').map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+
+            return (
+              <div key={u.id}>
+                {i > 0 && <div style={{ borderTop: '1px solid #f0eeea' }} />}
+
+                {/* Linha principal */}
+                <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+
+                  {/* Avatar */}
+                  <div style={{ flexShrink: 0 }}>
+                    {u.avatar_url ? (
+                      <img
+                        src={u.avatar_url} alt=""
+                        style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 40, height: 40, borderRadius: '50%',
+                        background: u.ativo ? GREEN : '#ccc',
+                        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '14px', fontWeight: '700', flexShrink: 0,
+                      }}>
+                        {iniciais}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Nome + e-mail */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      {u.nome_completo}
+                      {isSelf && (
+                        <span style={{ fontSize: '10px', fontWeight: '500', padding: '1px 7px', borderRadius: '8px', background: '#f0eeea', color: '#888' }}>
+                          Você
+                        </span>
+                      )}
+                      {isSuperAdminRow && (
+                        <span style={{ fontSize: '10px', fontWeight: '600', padding: '1px 7px', borderRadius: '8px', background: '#fff3cd', color: '#92400e' }}>
+                          Super Admin
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#888', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.email}
+                    </div>
+                  </div>
+
+                  {/* Badges vínculo + funções */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', flexShrink: 0, maxWidth: '260px' }}>
+                    {u.vinculo && (
+                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: '#f0eeea', color: '#555', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                        {VINCULO_LABEL[u.vinculo] ?? u.vinculo}
+                      </span>
+                    )}
+                    {(u.funcoes ?? []).map(f => (
+                      <span key={f} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: '#EEF0FF', color: GREEN_DARK, fontWeight: '600', whiteSpace: 'nowrap' }}>
+                        {FUNCAO_LABEL[f] ?? f}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Status + ações */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <span style={{
+                      fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: '500', whiteSpace: 'nowrap',
+                      background: u.ativo ? '#E6F7F1' : '#f0eeea',
+                      color: u.ativo ? '#166534' : '#888',
+                    }}>
+                      {u.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+
+                    {podeEditar && (
+                      <>
+                        <button
+                          onClick={() => handleToggleAtivo(u.id, u.ativo)}
+                          disabled={toggling}
+                          title={u.ativo ? 'Desativar' : 'Ativar'}
+                          style={{
+                            padding: '5px 10px', border: '1px solid #d5d3cc',
+                            borderRadius: '6px', background: '#fff',
+                            fontSize: '11px', color: '#555',
+                            cursor: toggling ? 'not-allowed' : 'pointer',
+                            opacity: toggling ? 0.6 : 1,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {toggling ? '...' : u.ativo ? 'Desativar' : 'Ativar'}
+                        </button>
+
+                        <button
+                          onClick={() => editando ? setEditandoId(null) : abrirEdicao(u)}
+                          style={{
+                            padding: '5px 10px',
+                            border: `1px solid ${editando ? '#d5d3cc' : GREEN}`,
+                            borderRadius: '6px',
+                            background: editando ? '#f0eeea' : '#fff',
+                            fontSize: '11px',
+                            color: editando ? '#555' : GREEN,
+                            cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {editando ? 'Cancelar' : 'Editar'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Painel de edição inline */}
+                {editando && (
+                  <div style={{ borderTop: '1px solid #f0eeea', background: '#f8f7f4', padding: '16px 16px 16px 68px' }}>
+                    {erroEditar && <Alerta tipo="erro" style={{ marginBottom: '12px' }}>{erroEditar}</Alerta>}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '20px', alignItems: 'start' }}>
+                      <div>
+                        <FieldLabel>Vínculo</FieldLabel>
+                        <select
+                          value={editForm.vinculo}
+                          onChange={e => setEditForm(prev => ({ ...prev, vinculo: e.target.value }))}
+                          style={{ ...inp, background: '#fff' }}
+                        >
+                          <option value="">Sem vínculo</option>
+                          {VINCULO_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <FieldLabel>Funções</FieldLabel>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                          {funcoes.map(f => {
+                            const sel = editForm.funcoes.includes(f.nome)
+                            return (
+                              <button
+                                key={f.nome} type="button"
+                                onClick={() => toggleFuncaoEdit(f.nome)}
+                                style={{
+                                  fontSize: '12px', padding: '4px 12px', borderRadius: '12px',
+                                  border: `1px solid ${sel ? GREEN : '#d5d3cc'}`,
+                                  background: sel ? '#EEF0FF' : '#fff',
+                                  color: sel ? GREEN_DARK : '#555',
+                                  cursor: 'pointer', fontWeight: sel ? '600' : '400',
+                                }}
+                              >
+                                {f.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '14px', display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => salvarEdicao(u.id)}
+                        disabled={salvando}
+                        style={{
+                          padding: '8px 18px',
+                          background: salvando ? '#9F9BFF' : GREEN,
+                          color: '#fff', border: 'none', borderRadius: '7px',
+                          fontSize: '12px', fontWeight: '600',
+                          cursor: salvando ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {salvando ? 'Salvando...' : 'Salvar'}
+                      </button>
+                      <button
+                        onClick={() => setEditandoId(null)}
+                        style={{
+                          padding: '8px 14px', background: '#fff',
+                          border: '1px solid #d5d3cc', borderRadius: '7px',
+                          fontSize: '12px', color: '#555', cursor: 'pointer',
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <div style={{ fontSize: '12px', fontWeight: '500', color: '#555', marginBottom: '5px' }}>
+      {children}{required && <span style={{ color: '#dc2626', marginLeft: '3px' }}>*</span>}
+    </div>
+  )
+}
+
+function Alerta({ tipo, children, style }: { tipo: 'erro' | 'ok'; children: React.ReactNode; style?: React.CSSProperties }) {
+  const ok = tipo === 'ok'
+  return (
+    <div style={{
+      background: ok ? '#E6F7F1' : '#fef2f2',
+      border: `1px solid ${ok ? '#1D9E7533' : '#fca5a5'}`,
+      borderRadius: '8px', padding: '8px 12px',
+      fontSize: '13px', color: ok ? '#166534' : '#dc2626',
+      ...style,
+    }}>
+      {children}
+    </div>
+  )
+}
+
+const inp: React.CSSProperties = {
+  width: '100%', padding: '9px 12px', border: '1px solid #d5d3cc',
+  borderRadius: '8px', fontSize: '13px', background: '#fafaf8',
+  color: '#1a1a1a', outline: 'none', boxSizing: 'border-box',
+}
