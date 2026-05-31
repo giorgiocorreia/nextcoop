@@ -1,11 +1,10 @@
 'use client'
 
 import React, { useRef, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import type { Usuario } from '@/types/database'
 import { traduzirErro } from '@/lib/utils/erros'
 import { uploadFile } from '@/lib/supabase/storage'
-import { salvarAvatarUrl, salvarPerfilUsuario } from './actions'
+import { alterarEmail, salvarAvatarUrl, salvarPerfilUsuario } from './actions'
 
 const GREEN = '#635BFF'
 
@@ -32,8 +31,7 @@ function formatData(iso: string) {
 interface Props { usuario: Usuario }
 
 export default function PerfilUsuario({ usuario: u }: Props) {
-  const supabase = createClient()
-  const fileRef  = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   // ── Dados básicos ──────────────────────────────────────────────────────────
   const [nome,     setNome]     = useState(u.nome_completo)
@@ -49,6 +47,7 @@ export default function PerfilUsuario({ usuario: u }: Props) {
   const [erroAv,   setErroAv]     = useState('')
 
   // ── E-mail ─────────────────────────────────────────────────────────────────
+  const [emailExibido, setEmailExibido] = useState(u.email)
   const [showEmail,    setShowEmail]    = useState(false)
   const [novoEmail,    setNovoEmail]    = useState('')
   const [senhaConf,    setSenhaConf]    = useState('')
@@ -85,13 +84,13 @@ export default function PerfilUsuario({ usuario: u }: Props) {
     if (!senhaConf)         { setErroEmail('Confirme sua senha atual.'); return }
     setSalvEmail(true); setErroEmail(''); setOkEmail('')
 
-    const { error: signErr } = await supabase.auth.signInWithPassword({ email: u.email, password: senhaConf })
-    if (signErr) { setSalvEmail(false); setErroEmail('Senha incorreta.'); return }
-
-    const { error: updErr } = await supabase.auth.updateUser({ email: novoEmail.trim() })
+    const res = await alterarEmail(novoEmail.trim(), senhaConf)
     setSalvEmail(false)
-    if (updErr) { setErroEmail(traduzirErro(updErr.message)); return }
-    setOkEmail('Confirmação enviada para ambos os e-mails. Clique nos links para confirmar a troca.')
+    if (res.error) { setErroEmail(traduzirErro(res.error)); return }
+
+    const emailNovo = novoEmail.trim()
+    setEmailExibido(emailNovo)
+    setOkEmail(`E-mail alterado para ${emailNovo}.`)
     setNovoEmail(''); setSenhaConf(''); setShowEmail(false)
   }
 
@@ -153,7 +152,7 @@ export default function PerfilUsuario({ usuario: u }: Props) {
       <div style={{ marginBottom: '1.25rem' }}>
         <FieldLabel>E-mail</FieldLabel>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ ...inp, color: '#888', background: '#f0eeea', flex: 1, cursor: 'default' }}>{u.email}</div>
+          <div style={{ ...inp, color: '#888', background: '#f0eeea', flex: 1, cursor: 'default' }}>{emailExibido}</div>
           <button type="button"
             onClick={() => { setShowEmail(v => !v); setErroEmail(''); setOkEmail('') }}
             style={{ fontSize: '12px', fontWeight: '600', padding: '9px 14px', border: '1px solid #d5d3cc', borderRadius: '8px', background: '#fff', color: '#555', cursor: 'pointer', whiteSpace: 'nowrap' }}>

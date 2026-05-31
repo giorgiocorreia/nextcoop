@@ -105,3 +105,34 @@ export async function salvarAvatarUrl(avatarUrl: string): Promise<{ error?: stri
   if (error) return { error: error.message }
   return {}
 }
+
+export async function alterarEmail(
+  novoEmail: string,
+  senhaAtual: string
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return { error: 'Não autenticado.' }
+
+  // Valida a senha atual antes de qualquer alteração
+  const { error: signErr } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: senhaAtual,
+  })
+  if (signErr) return { error: 'Senha incorreta.' }
+
+  const admin = createAdminClient()
+
+  // Atualiza e-mail no Auth imediatamente, sem enviar confirmação para nenhum lado
+  // (a prova de identidade é a senha, não o link de e-mail)
+  const { error: authErr } = await admin.auth.admin.updateUserById(user.id, {
+    email: novoEmail.trim(),
+    email_confirm: true,
+  })
+  if (authErr) return { error: authErr.message }
+
+  // Mantém a coluna email da tabela usuarios sincronizada com auth.users
+  await admin.from('usuarios').update({ email: novoEmail.trim() }).eq('id', user.id)
+
+  return {}
+}
