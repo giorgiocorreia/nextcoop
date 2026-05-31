@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Usuario } from '@/types/database'
 import { traduzirErro } from '@/lib/utils/erros'
 import { uploadFile } from '@/lib/supabase/storage'
+import { salvarAvatarUrl, salvarPerfilUsuario } from './actions'
 
 const GREEN = '#635BFF'
 
@@ -58,14 +59,10 @@ export default function PerfilUsuario({ usuario: u }: Props) {
   async function salvarDados() {
     if (!nome.trim()) { setErroDados('Nome completo é obrigatório.'); return }
     setSalvando(true); setErroDados(''); setOkDados('')
-    const { error } = await supabase
-      .from('usuarios')
-      .update({ nome_completo: nome.trim(), telefone: telefone.trim() || null })
-      .eq('id', u.id)
+    const res = await salvarPerfilUsuario({ nome_completo: nome, telefone: telefone || null })
     setSalvando(false)
-    if (error) { setErroDados(traduzirErro(error.message)); return }
+    if (res.error) { setErroDados(res.error); return }
     setOkDados('Dados atualizados.')
-
     setTimeout(() => setOkDados(''), 3000)
   }
 
@@ -77,9 +74,9 @@ export default function PerfilUsuario({ usuario: u }: Props) {
     const path = `${u.id}/avatar.${ext}`
     const res  = await uploadFile('avatares', path, file)
     if (res.error) { setErroAv(traduzirErro(res.error)); setUpAvatar(false); return }
-    const { error } = await supabase.from('usuarios').update({ avatar_url: res.url }).eq('id', u.id)
+    const dbRes = await salvarAvatarUrl(res.url ?? '')
     setUpAvatar(false)
-    if (error) { setErroAv(traduzirErro(error.message)); return }
+    if (dbRes.error) { setErroAv(dbRes.error); return }
     setAvatar(res.url ?? '')
   }
 

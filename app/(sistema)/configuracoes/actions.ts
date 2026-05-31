@@ -69,3 +69,39 @@ export async function salvarOrganizacao(input: SalvarOrgInput): Promise<{ error?
   if (error) return { error: error.message }
   return {}
 }
+
+export async function salvarPerfilUsuario(dados: {
+  nome_completo: string
+  telefone: string | null
+}): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('usuarios')
+    .update({
+      nome_completo: dados.nome_completo.trim(),
+      telefone: dados.telefone?.trim() || null,
+    })
+    .eq('id', user.id)
+
+  if (error) return { error: error.message }
+  return {}
+}
+
+export async function salvarAvatarUrl(avatarUrl: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('usuarios')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', user.id)
+
+  if (error) return { error: error.message }
+  return {}
+}
