@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import Anthropic from '@anthropic-ai/sdk'
 import { traduzirErro } from '@/lib/utils/erros'
@@ -382,6 +383,7 @@ export async function executarRadar() {
     if (!fontes?.length) return { error: 'Nenhuma fonte ativa cadastrada' }
 
     const client = new Anthropic({ apiKey })
+    const admin  = createAdminClient()
     const agora  = new Date().toISOString()
     const errosPorFonte: string[] = []
 
@@ -389,7 +391,7 @@ export async function executarRadar() {
       console.log(`[Radar] ── Fonte: "${fonte.nome}" | ${fonte.url}`)
 
       // Limpa resultados antigos não adicionados ao pipeline
-      await supabase
+      await admin
         .from('radar_resultados')
         .delete()
         .eq('fonte_id', fonte.id)
@@ -454,29 +456,36 @@ export async function executarRadar() {
         continue
       }
 
-      // Salva resultados
-      for (const edital of editais) {
-        await supabase.from('radar_resultados').insert({
-          organizacao_id: orgId,
-          fonte_id:        fonte.id,
-          titulo:          edital.titulo ?? 'Sem título',
-          descricao:       edital.descricao ?? null,
-          financiador:     edital.financiador ?? null,
-          url_edital:      edital.url_edital ?? null,
-          valor_estimado:  edital.valor_estimado ?? null,
-          prazo_submissao: edital.prazo_submissao ?? null,
-          areas_tematicas: edital.areas_tematicas ?? [],
-          publico_alvo:    edital.publico_alvo ?? [],
-          score:           Math.min(100, Math.max(0, edital.score ?? 0)),
-          compatibilidade: edital.compatibilidade ?? 'parcial',
-          motivo:          edital.motivo ?? null,
-          varredura_em:    agora,
-        })
+      // Salva resultados via admin (RLS de radar_resultados não tem with check)
+      const inserts = editais.map(edital => ({
+        organizacao_id: orgId,
+        fonte_id:        fonte.id,
+        titulo:          edital.titulo ?? 'Sem título',
+        descricao:       edital.descricao ?? null,
+        financiador:     edital.financiador ?? null,
+        url_edital:      edital.url_edital ?? null,
+        valor_estimado:  edital.valor_estimado ?? null,
+        prazo_submissao: edital.prazo_submissao ?? null,
+        areas_tematicas: edital.areas_tematicas ?? [],
+        publico_alvo:    edital.publico_alvo ?? [],
+        score:           Math.min(100, Math.max(0, edital.score ?? 0)),
+        compatibilidade: edital.compatibilidade ?? 'parcial',
+        motivo:          edital.motivo ?? null,
+        varredura_em:    agora,
+      }))
+
+      if (inserts.length > 0) {
+        const { error: insertErr } = await admin.from('radar_resultados').insert(inserts)
+        if (insertErr) {
+          console.error(`[Radar] Insert falhou para "${fonte.nome}":`, insertErr.message)
+          errosPorFonte.push(`[${fonte.nome}] Insert falhou: ${insertErr.message}`)
+        } else {
+          console.log(`[Radar] "${fonte.nome}" — ${inserts.length} editais inseridos`)
+        }
       }
 
-      // Atualiza ultima_varredura da fonte
-      await supabase.from('radar_fontes').update({ ultima_varredura: agora }).eq('id', fonte.id)
-      console.log(`[Radar] "${fonte.nome}" concluída — ${editais.length} editais salvos`)
+      // Atualiza ultima_varredura via admin (RLS de radar_fontes não tem with check)
+      await admin.from('radar_fontes').update({ ultima_varredura: agora }).eq('id', fonte.id)
     }
 
     // Retorna todos os resultados atuais ordenados por score
